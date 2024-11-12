@@ -276,27 +276,22 @@ static void serialConfig(void *pvParam)
 
 static void countingHourMeter(void *pvParam)
 {
-    DateTime startTime = rtc->now();
-    Serial.printf("[HM] Start Time : \n");
+    DateTime startTime, currentTime;
+    time_t runTimeAccrued = 0;
 
-    DateTime pollingTime;
-    time_t runHour, totalRunHour;
-
-    // time_t currentHourMeter = 900;
     while (1)
     {
-        pollingTime = rtc->now();
-
+        currentTime = rtc->now();
+        // Serial.printf("[HM] Start Time : \n");
         // Serial.printf("Polling Time: %ld s, Start Time: %lu s\n", pollingTime.secondstime(), startTime.secondstime());
 
-        runHour = static_cast<time_t>(pollingTime.secondstime()) - static_cast<time_t>(startTime.secondstime());
-        // BUG: this printf gives me big number. but the totalRunHour is right
-        // Serial.printf("[HM] run Hour : %lu s\n");
+        runTimeAccrued = static_cast<time_t>(currentTime.secondstime()) - static_cast<time_t>(startTime.secondstime());
 
-        totalRunHour = currentHourMeter + runHour;
-        Serial.printf("[HM] this machine has running hour of %ld s\n", totalRunHour);
+        currentHourMeter += runTimeAccrued;
 
-        if (hm->saveToStorage(totalRunHour))
+        Serial.printf("[HM] this machine has running hour of %ld s\n", currentHourMeter);
+
+        if (hm->saveToStorage(currentHourMeter))
         {
             Serial.println("[HM] total run hour is saved to storage");
         }
@@ -304,6 +299,8 @@ static void countingHourMeter(void *pvParam)
         {
             Serial.println("[HM] total run hour is failed to be saved");
         }
+
+        startTime = currentTime; // Update start time for the next interval
 
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
