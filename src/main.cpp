@@ -40,7 +40,7 @@ SemaphoreHandle_t xSemaphore = NULL;
 BLEAdvertising *pAdvertising;
 BeaconData_t data;
 HardwareSerial modbus(1);
-time_t currentHourMeter;
+time_t currentHourMeter = 0;
 // TODO: Declare Setting_t
 
 void setup()
@@ -83,7 +83,7 @@ void setup()
     pAdvertising = BLEDevice::getAdvertising();
 
     /* HOUR METER INIT */
-    hm = new HourMeter(currentHourMeter);
+    hm = new HourMeter();
     currentHourMeter = hm->loadHMFromStorage();
     Serial.printf("[HM] Hour Meter yang tersimpan adalah %ld\n", currentHourMeter);
     // TODO: Print juga hour meter dalam jam
@@ -91,7 +91,7 @@ void setup()
     // xTaskCreatePinnedToCore(RTCDemo, "RTC Demo", 2048, NULL, 3, &RTCDemoHandler, 1); // TODO: Depreciating
     xTaskCreatePinnedToCore(dataAcquisition, "Data Acquisition", 4096, NULL, 3, &dataAcquisitionHandler, 1);
     xTaskCreatePinnedToCore(sendBLEData, "Send BLE Data", 2048, NULL, 3, &sendBLEDataHandler, 0);
-    xTaskCreatePinnedToCore(retrieveGPSData, "get GPS Data", 2048, NULL, 4, &retrieveGPSHandler, 1);
+    xTaskCreatePinnedToCore(retrieveGPSData, "get GPS Data", 4096, NULL, 4, &retrieveGPSHandler, 1);
     xTaskCreatePinnedToCore(sendToRS485, "send data to RS485", 2048, NULL, 3, &sendToRS485Handler, 0);
     xTaskCreatePinnedToCore(countingHourMeter, "Updating Hour Meter", 8192, NULL, 3, &countingHMHandler, 0);
 }
@@ -181,10 +181,10 @@ static void setCustomBeacon()
     beacon_data[12] = ((latitudeFixedPoint & 0xFF0000) >> 16);   //
     beacon_data[13] = ((latitudeFixedPoint & 0xFF00) >> 8);      //
     beacon_data[14] = (latitudeFixedPoint & 0xFF);               //
-    // beacon_data[15] = (((lastTenth / 10) & 0xFF000000) >> 24);    //
-    // beacon_data[16] = (((lastTenth / 10) & 0xFF0000) >> 16);      //
-    // beacon_data[17] = (((lastTenth / 10) & 0xFF00) >> 8);         //
-    // beacon_data[18] = ((lastTenth / 10) & 0xFF);                  //
+    // beacon_data[15] = ((currentHourMeter & 0xFF000000) >> 24);   //
+    // beacon_data[16] = ((currentHourMeter & 0xFF0000) >> 16);     //
+    // beacon_data[17] = ((currentHourMeter & 0xFF00) >> 8);        //
+    // beacon_data[18] = (currentHourMeter & 0xFF);                 //
 
     oScanResponseData.setServiceData(BLEUUID(beaconUUID), std::string(beacon_data, sizeof(beacon_data)));
     oAdvertisementData.setName("OMU Demo Data");
@@ -278,6 +278,10 @@ static void countingHourMeter(void *pvParam)
 {
     DateTime startTime, currentTime;
     time_t runTimeAccrued = 0;
+
+    startTime = rtc->now();
+    Serial.printf("[HM] Dozing Counter started at %02d:%02d:%02d\n",
+                  startTime.hour(), startTime.minute(), startTime.second());
 
     while (1)
     {
