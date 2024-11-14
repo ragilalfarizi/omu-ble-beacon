@@ -161,7 +161,7 @@ static void setCustomBeacon()
     // int16_t analogInputFixedPoint = (int16_t)(analogInputVal * 256);
 
     /* PROCESSING DATA SEBELUM DIKIRIM MELALUI BLE */
-    char beacon_data[15];
+    char beacon_data[19];
     uint16_t volt = data.voltageSupply * 1000; // 3300mV = 3.3V
     int32_t latitudeFixedPoint = (int32_t)(data.gps.latitude * 256);
     int32_t longitudeFixedPoint = (int32_t)(data.gps.longitude * 256);
@@ -181,10 +181,10 @@ static void setCustomBeacon()
     beacon_data[12] = ((latitudeFixedPoint & 0xFF0000) >> 16);   //
     beacon_data[13] = ((latitudeFixedPoint & 0xFF00) >> 8);      //
     beacon_data[14] = (latitudeFixedPoint & 0xFF);               //
-    // beacon_data[15] = ((currentHourMeter & 0xFF000000) >> 24);   //
-    // beacon_data[16] = ((currentHourMeter & 0xFF0000) >> 16);     //
-    // beacon_data[17] = ((currentHourMeter & 0xFF00) >> 8);        //
-    // beacon_data[18] = (currentHourMeter & 0xFF);                 //
+    beacon_data[15] = ((currentHourMeter & 0xFF000000) >> 24);   //
+    beacon_data[16] = ((currentHourMeter & 0xFF0000) >> 16);     //
+    beacon_data[17] = ((currentHourMeter & 0xFF00) >> 8);        //
+    beacon_data[18] = (currentHourMeter & 0xFF);                 //
 
     oScanResponseData.setServiceData(BLEUUID(beaconUUID), std::string(beacon_data, sizeof(beacon_data)));
     oAdvertisementData.setName("OMU Demo Data");
@@ -233,7 +233,7 @@ static void retrieveGPSData(void *pvParam)
         {
             if (isValid)
             {
-                Serial.printf("[GPS] Latitude : %f", data.gps.longitude);
+                Serial.printf("[GPS] Latitude : %f", data.gps.latitude);
                 Serial.printf("[GPS] Longitude : %f", data.gps.longitude);
             }
             else
