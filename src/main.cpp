@@ -297,6 +297,7 @@ static void serialConfig(void *pvParam)
 
                 // save the config to littlefs
                 hm->saveSettings(setting);
+                hm->saveToStorage(data.hourMeter);
             }
         }
         vTaskDelay(50 / portTICK_PERIOD_MS); // Short delay
@@ -361,6 +362,7 @@ static void updateConfigFromUART(Setting_t &setting, const String &input)
 {
     int firstComma = input.indexOf(',');
     int secondComma = input.indexOf(',', firstComma + 1);
+    int thirdComma = input.indexOf(',', secondComma + 1);
 
     if (firstComma > 0)
     {
@@ -373,9 +375,15 @@ static void updateConfigFromUART(Setting_t &setting, const String &input)
         setting.thresholdHM = thresholdPart.toInt();
     }
 
-    if (secondComma + 1 < input.length())
+    if (thirdComma > secondComma + 1)
     {
         String offsetPart = input.substring(secondComma + 1);
         setting.offsetAnalogInput = offsetPart.toFloat();
+    }
+
+    if (thirdComma + 1 < input.length())
+    {
+        String hourMeterPart = input.substring(thirdComma + 1);
+        data.hourMeter = hourMeterPart.toInt(); // Convert to time_t or long
     }
 }
