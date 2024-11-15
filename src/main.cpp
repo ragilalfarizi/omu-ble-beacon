@@ -40,7 +40,8 @@ SemaphoreHandle_t xSemaphore = NULL;
 BLEAdvertising *pAdvertising;
 BeaconData_t data;
 HardwareSerial modbus(1);
-time_t currentHourMeter = 0;
+// time_t currentHourMeter = 0;
+Setting_t setting;
 // TODO: Declare Setting_t
 
 void setup()
@@ -84,9 +85,15 @@ void setup()
 
     /* HOUR METER INIT */
     hm = new HourMeter();
-    currentHourMeter = hm->loadHMFromStorage();
-    Serial.printf("[HM] Hour Meter yang tersimpan adalah %ld\n", currentHourMeter);
+    data.hourMeter = hm->loadHMFromStorage();
+    Serial.printf("[HM] Hour Meter yang tersimpan adalah %ld\n", data.hourMeter);
     // TODO: Print juga hour meter dalam jam
+
+    /* LOAD SETTING */
+    setting = hm->loadSetting();
+    Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID);
+    Serial.printf("[setting] threshold HM\t\t: %d\n", setting.thresholdHM);
+    Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
 
     // xTaskCreatePinnedToCore(RTCDemo, "RTC Demo", 2048, NULL, 3, &RTCDemoHandler, 1); // TODO: Depreciating
     xTaskCreatePinnedToCore(dataAcquisition, "Data Acquisition", 4096, NULL, 3, &dataAcquisitionHandler, 1);
@@ -131,7 +138,12 @@ static void dataAcquisition(void *pvParam)
             Serial.printf("GPS STATUS\t\t= %c\n", data.gps.status);
             Serial.printf("GPS LATITUDE\t\t= %f\n", data.gps.latitude);
             Serial.printf("GPS LONGITUDE\t\t= %f\n", data.gps.longitude);
-            Serial.printf("Analog Input\t\t= %.2f\n", data.voltageSupply);
+            Serial.printf("Analog Input\t\t= %.2f V\n", data.voltageSupply);
+            Serial.printf("Hour Meter\t\t= %ld s\n", data.hourMeter);
+            Serial.printf("============================================\n");
+            Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID);
+            Serial.printf("[setting] threshold HM\t\t: %d\n", setting.thresholdHM);
+            Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
             Serial.printf("============================================\n");
 
             xSemaphoreGive(xSemaphore);
@@ -181,10 +193,10 @@ static void setCustomBeacon()
     beacon_data[12] = ((latitudeFixedPoint & 0xFF0000) >> 16);   //
     beacon_data[13] = ((latitudeFixedPoint & 0xFF00) >> 8);      //
     beacon_data[14] = (latitudeFixedPoint & 0xFF);               //
-    beacon_data[15] = ((currentHourMeter & 0xFF000000) >> 24);   //
-    beacon_data[16] = ((currentHourMeter & 0xFF0000) >> 16);     //
-    beacon_data[17] = ((currentHourMeter & 0xFF00) >> 8);        //
-    beacon_data[18] = (currentHourMeter & 0xFF);                 //
+    beacon_data[15] = ((data.hourMeter & 0xFF000000) >> 24);   //
+    beacon_data[16] = ((data.hourMeter & 0xFF0000) >> 16);     //
+    beacon_data[17] = ((data.hourMeter & 0xFF00) >> 8);        //
+    beacon_data[18] = (data.hourMeter & 0xFF);                 //
 
     oScanResponseData.setServiceData(BLEUUID(beaconUUID), std::string(beacon_data, sizeof(beacon_data)));
     oAdvertisementData.setName("OMU Demo Data");
@@ -194,7 +206,6 @@ static void setCustomBeacon()
 
 static void sendBLEData(void *pvParam)
 {
-
     while (1)
     {
         setCustomBeacon();
@@ -278,33 +289,51 @@ static void countingHourMeter(void *pvParam)
 {
     DateTime startTime, currentTime;
     time_t runTimeAccrued = 0;
+    bool isCounting = false; // Tracks if counting has started
 
-    startTime = rtc->now();
-    Serial.printf("[HM] Dozing Counter started at %02d:%02d:%02d\n",
-                  startTime.hour(), startTime.minute(), startTime.second());
+    // startTime = rtc->now();
+    // Serial.printf("[HM] Dozing Counter started at %02d:%02d:%02d\n",
+    //               startTime.hour(), startTime.minute(), startTime.second());
 
     while (1)
     {
-        currentTime = rtc->now();
-        // Serial.printf("[HM] Start Time : \n");
-        // Serial.printf("Polling Time: %ld s, Start Time: %lu s\n", pollingTime.secondstime(), startTime.secondstime());
-
-        runTimeAccrued = static_cast<time_t>(currentTime.secondstime()) - static_cast<time_t>(startTime.secondstime());
-
-        currentHourMeter += runTimeAccrued;
-
-        Serial.printf("[HM] this machine has running hour of %ld s\n", currentHourMeter);
-
-        if (hm->saveToStorage(currentHourMeter))
+        if (data.voltageSupply >= setting.thresholdHM)
         {
-            Serial.println("[HM] total run hour is saved to storage");
+            // Serial.printf("[HM] Start Time : \n");
+            // Serial.printf("Polling Time: %ld s, Start Time: %lu s\n", pollingTime.secondstime(), startTime.secondstime());
+            if (!isCounting)
+            {
+                // Initialize startTime when counting begins
+                startTime = rtc->now();
+                Serial.printf("[HM] Voltage above threshold. Counting started at %02d:%02d:%02d\n",
+                              startTime.hour(), startTime.minute(), startTime.second());
+                isCounting = true;
+            }
+
+            currentTime = rtc->now();
+            runTimeAccrued = static_cast<time_t>(currentTime.secondstime()) - static_cast<time_t>(startTime.secondstime());
+
+            data.hourMeter += runTimeAccrued;
+
+            // Serial.printf("[HM] this machine has running hour of %ld s\n", data.hourMeter);
+            Serial.printf("[HM] Hour Meter is updated\n");
+
+            if (hm->saveToStorage(data.hourMeter))
+            {
+                Serial.println("[HM] total run hour is saved to storage");
+            }
+            else
+            {
+                Serial.println("[HM] total run hour is failed to be saved");
+            }
+
+            startTime = currentTime; // Update start time for the next interval
         }
         else
         {
-            Serial.println("[HM] total run hour is failed to be saved");
+            Serial.println("[HM] Voltage below threshold, counting paused.");
+            isCounting = false; // Reset counting state
         }
-
-        startTime = currentTime; // Update start time for the next interval
 
         vTaskDelay(pdMS_TO_TICKS(1000));
     }

@@ -94,8 +94,38 @@ time_t HourMeter::loadHMFromStorage()
     return hourMeter;
 }
 
-Setting_t HourMeter::loadSettingFromStorage()
+Setting_t HourMeter::loadSetting()
 {
-    Setting_t dummy{-1};
-    return dummy;
+    Setting_t setting;
+    Serial.println("Attempting to open settings.json for reading...");
+
+    File file = LittleFS.open("/settings.json", "r");
+
+    if (file)
+    {
+        JsonDocument doc;
+
+        DeserializationError error = deserializeJson(doc, file);
+        if (error)
+        {
+            Serial.print("Data format error: Failed to parse JSON in settings.json: ");
+            Serial.println(error.c_str());
+            file.close();
+            return setting; // Return with default or previously set values
+        }
+
+        // Extract values from JSON if successfully parsed
+        setting.ID = doc["ID"].as<String>();
+        setting.thresholdHM = doc["thresholdHM"].as<uint8_t>();
+        setting.offsetAnalogInput = doc["offsetAnalogInput"].as<float>();
+
+        Serial.println("Successfully read settings from settings.json");
+        file.close();
+    }
+    else
+    {
+        Serial.println("Error: Could not open settings.json for reading.");
+    }
+
+    return setting;
 }

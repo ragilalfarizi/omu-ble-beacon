@@ -21,9 +21,7 @@ struct BeaconData_t {
 
 struct Setting_t
 {
-    // TODO: Adjust the type data
-    int32_t settingDevice;
-    int32_t voltageThreshold;
-    int32_t codeUnit;
-    int32_t offsetThreshold;
+    String ID;
+    uint8_t thresholdHM;
+    float offsetAnalogInput;
 };
