@@ -41,6 +41,7 @@ BLEAdvertising *pAdvertising;
 BeaconData_t data;
 HardwareSerial modbus(1);
 time_t currentHourMeter = 0;
+Setting_t setting;
 // TODO: Declare Setting_t
 
 void setup()
@@ -88,6 +89,12 @@ void setup()
     Serial.printf("[HM] Hour Meter yang tersimpan adalah %ld\n", currentHourMeter);
     // TODO: Print juga hour meter dalam jam
 
+    /* LOAD SETTING */
+    setting = hm->loadSetting();
+    Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID);
+    Serial.printf("[setting] threshold HM\t\t: %d\n", setting.thresholdHM);
+    Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
+
     // xTaskCreatePinnedToCore(RTCDemo, "RTC Demo", 2048, NULL, 3, &RTCDemoHandler, 1); // TODO: Depreciating
     xTaskCreatePinnedToCore(dataAcquisition, "Data Acquisition", 4096, NULL, 3, &dataAcquisitionHandler, 1);
     xTaskCreatePinnedToCore(sendBLEData, "Send BLE Data", 2048, NULL, 3, &sendBLEDataHandler, 0);
@@ -132,6 +139,10 @@ static void dataAcquisition(void *pvParam)
             Serial.printf("GPS LATITUDE\t\t= %f\n", data.gps.latitude);
             Serial.printf("GPS LONGITUDE\t\t= %f\n", data.gps.longitude);
             Serial.printf("Analog Input\t\t= %.2f\n", data.voltageSupply);
+            Serial.printf("============================================\n");
+            Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID);
+            Serial.printf("[setting] threshold HM\t\t: %d\n", setting.thresholdHM);
+            Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
             Serial.printf("============================================\n");
 
             xSemaphoreGive(xSemaphore);

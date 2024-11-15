@@ -5,6 +5,7 @@
 #include <LittleFS.h>
 #include "common.h"
 #include <rtc.h>
+#include <ArduinoJson.h>
 
 // WARN: DEPRECIATED
 #define STORAGE_ADDRESS_HOUR_METER 0 // Size of Hour Meter is 4 bytes
@@ -24,7 +25,9 @@ public:
 
     time_t loadHMFromStorage();
 
-    Setting_t loadSettingFromStorage();
+    Setting_t loadSetting();
+
+    void saveSettings(const Setting_t &setting);
 
     void printStorage();
 
