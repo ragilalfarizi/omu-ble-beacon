@@ -100,7 +100,7 @@ void setup()
     // xTaskCreatePinnedToCore(RTCDemo, "RTC Demo", 2048, NULL, 3, &RTCDemoHandler, 1); // TODO: Depreciating
     xTaskCreatePinnedToCore(dataAcquisition, "Data Acquisition", 4096, NULL, 3, &dataAcquisitionHandler, 1);
     xTaskCreatePinnedToCore(sendBLEData, "Send BLE Data", 2048, NULL, 3, &sendBLEDataHandler, 0);
-    // xTaskCreatePinnedToCore(retrieveGPSData, "get GPS Data", 4096, NULL, 4, &retrieveGPSHandler, 1);
+    xTaskCreatePinnedToCore(retrieveGPSData, "get GPS Data", 4096, NULL, 4, &retrieveGPSHandler, 1);
     // xTaskCreatePinnedToCore(sendToRS485, "send data to RS485", 2048, NULL, 3, &sendToRS485Handler, 0);
     xTaskCreatePinnedToCore(countingHourMeter, "Updating Hour Meter", 8192, NULL, 3, &countingHMHandler, 0);
     xTaskCreatePinnedToCore(serialConfig, "Updating setting", 4096, NULL, 3, &settingUARTHandler, 1);
@@ -281,6 +281,9 @@ static void sendToRS485(void *pvParam)
 static void serialConfig(void *pvParam)
 {
     // NOTE: TURN OFF GPS SWITCH
+    TickType_t startTime = xTaskGetTickCount(); // Record the start time
+    TickType_t duration = pdMS_TO_TICKS(60000 / 4); // 1 minute = 60000 ms
+
     while (1)
     {
         if (Serial.available())
@@ -300,6 +303,14 @@ static void serialConfig(void *pvParam)
                 hm->saveToStorage(data.hourMeter);
             }
         }
+
+        // Check if 1 minute has passed
+        if (xTaskGetTickCount() - startTime >= duration)
+        {
+            Serial.println("Serial config task timeout reached. Deleting task.");
+            vTaskDelete(settingUARTHandler); // Delete the task after 1 minute
+        }
+
         vTaskDelay(50 / portTICK_PERIOD_MS); // Short delay
     }
 }
