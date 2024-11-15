@@ -26,6 +26,7 @@ static void sendToRS485(void *pvParam);
 static void countingHourMeter(void *pvParam);
 static void serialConfig(void *pvParam);
 static void setCustomBeacon();
+static void updateConfigFromUART(Setting_t &setting, const String &input);
 
 /* FORWARD DECLARATION UNTUK HANDLER DAN SEMAPHORE RTOS */
 // TaskHandle_t RTCDemoHandler = NULL;
@@ -34,6 +35,7 @@ TaskHandle_t sendBLEDataHandler = NULL;
 TaskHandle_t retrieveGPSHandler = NULL;
 TaskHandle_t sendToRS485Handler = NULL;
 TaskHandle_t countingHMHandler = NULL;
+TaskHandle_t settingUARTHandler = NULL;
 SemaphoreHandle_t xSemaphore = NULL;
 
 /* GLOBAL VARIABLES */
@@ -99,8 +101,9 @@ void setup()
     xTaskCreatePinnedToCore(dataAcquisition, "Data Acquisition", 4096, NULL, 3, &dataAcquisitionHandler, 1);
     xTaskCreatePinnedToCore(sendBLEData, "Send BLE Data", 2048, NULL, 3, &sendBLEDataHandler, 0);
     xTaskCreatePinnedToCore(retrieveGPSData, "get GPS Data", 4096, NULL, 4, &retrieveGPSHandler, 1);
-    xTaskCreatePinnedToCore(sendToRS485, "send data to RS485", 2048, NULL, 3, &sendToRS485Handler, 0);
+    // xTaskCreatePinnedToCore(sendToRS485, "send data to RS485", 2048, NULL, 3, &sendToRS485Handler, 0);
     xTaskCreatePinnedToCore(countingHourMeter, "Updating Hour Meter", 8192, NULL, 3, &countingHMHandler, 0);
+    xTaskCreatePinnedToCore(serialConfig, "Updating setting", 4096, NULL, 3, &settingUARTHandler, 1);
 }
 
 void loop()
@@ -142,7 +145,7 @@ static void dataAcquisition(void *pvParam)
             Serial.printf("Hour Meter\t\t= %ld s\n", data.hourMeter);
             Serial.printf("============================================\n");
             Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID);
-            Serial.printf("[setting] threshold HM\t\t: %d\n", setting.thresholdHM);
+            Serial.printf("[setting] threshold HM\t\t: %d V\n", setting.thresholdHM);
             Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
             Serial.printf("============================================\n");
 
@@ -193,10 +196,10 @@ static void setCustomBeacon()
     beacon_data[12] = ((latitudeFixedPoint & 0xFF0000) >> 16);   //
     beacon_data[13] = ((latitudeFixedPoint & 0xFF00) >> 8);      //
     beacon_data[14] = (latitudeFixedPoint & 0xFF);               //
-    beacon_data[15] = ((data.hourMeter & 0xFF000000) >> 24);   //
-    beacon_data[16] = ((data.hourMeter & 0xFF0000) >> 16);     //
-    beacon_data[17] = ((data.hourMeter & 0xFF00) >> 8);        //
-    beacon_data[18] = (data.hourMeter & 0xFF);                 //
+    beacon_data[15] = ((data.hourMeter & 0xFF000000) >> 24);     //
+    beacon_data[16] = ((data.hourMeter & 0xFF0000) >> 16);       //
+    beacon_data[17] = ((data.hourMeter & 0xFF00) >> 8);          //
+    beacon_data[18] = (data.hourMeter & 0xFF);                   //
 
     oScanResponseData.setServiceData(BLEUUID(beaconUUID), std::string(beacon_data, sizeof(beacon_data)));
     oAdvertisementData.setName("OMU Demo Data");
@@ -277,11 +280,38 @@ static void sendToRS485(void *pvParam)
  */
 static void serialConfig(void *pvParam)
 {
+    // NOTE: TURN OFF GPS SWITCH
+    TickType_t startTime = xTaskGetTickCount(); // Record the start time
+    TickType_t duration = pdMS_TO_TICKS(60000 / 4); // 1 minute = 60000 ms
+
     while (1)
     {
-        // TODO: Print RS485 input
-        // TODO: Parse
-        // TODO: update to EEPROM
+        if (Serial.available())
+        {
+            String uartInput = Serial.readStringUntil('\n');
+            uartInput.trim();
+
+            if (!uartInput.isEmpty())
+            {
+                updateConfigFromUART(setting, uartInput);
+                Serial.println("Config updated from UART input.");
+
+                vTaskDelay(pdMS_TO_TICKS(1000));
+
+                // save the config to littlefs
+                hm->saveSettings(setting);
+                hm->saveToStorage(data.hourMeter);
+            }
+        }
+
+        // Check if 1 minute has passed
+        if (xTaskGetTickCount() - startTime >= duration)
+        {
+            Serial.println("Serial config task timeout reached. Deleting task.");
+            vTaskDelete(settingUARTHandler); // Delete the task after 1 minute
+        }
+
+        vTaskDelay(50 / portTICK_PERIOD_MS); // Short delay
     }
 }
 
@@ -336,5 +366,35 @@ static void countingHourMeter(void *pvParam)
         }
 
         vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+static void updateConfigFromUART(Setting_t &setting, const String &input)
+{
+    int firstComma = input.indexOf(',');
+    int secondComma = input.indexOf(',', firstComma + 1);
+    int thirdComma = input.indexOf(',', secondComma + 1);
+
+    if (firstComma > 0)
+    {
+        setting.ID = input.substring(0, firstComma);
+    }
+
+    if (secondComma > firstComma + 1)
+    {
+        String thresholdPart = input.substring(firstComma + 1, secondComma);
+        setting.thresholdHM = thresholdPart.toInt();
+    }
+
+    if (thirdComma > secondComma + 1)
+    {
+        String offsetPart = input.substring(secondComma + 1);
+        setting.offsetAnalogInput = offsetPart.toFloat();
+    }
+
+    if (thirdComma + 1 < input.length())
+    {
+        String hourMeterPart = input.substring(thirdComma + 1);
+        data.hourMeter = hourMeterPart.toInt(); // Convert to time_t or long
     }
 }
