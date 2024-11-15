@@ -129,3 +129,33 @@ Setting_t HourMeter::loadSetting()
 
     return setting;
 }
+
+void HourMeter::saveSettings(const Setting_t &setting)
+{
+    // Create a JSON document
+    JsonDocument doc;
+
+    // Populate the JSON document with the Setting_t data
+    doc["ID"] = setting.ID;
+    doc["thresholdHM"] = setting.thresholdHM;
+    doc["offsetAnalogInput"] = setting.offsetAnalogInput;
+
+    // Open settings.json file for writing
+    File file = LittleFS.open("/settings.json", "w");
+    if (!file)
+    {
+        Serial.println("Failed to open settings.json for writing");
+        return;
+    }
+
+    // Serialize JSON to file
+    if (serializeJson(doc, file) == 0)
+    {
+        Serial.println("Failed to write JSON to file");
+        file.close();
+        return;
+    }
+
+    file.close(); // Close file after writing
+    Serial.println("Settings saved to settings.json");
+}

@@ -54,6 +54,7 @@ bool HourMeter::saveToStorage(const T &data)
             // Write the latest value in JSON format
             fprintf(file, "%ld", data);
             fclose(file);
+            return true;
         }
         else
         {
@@ -66,12 +67,9 @@ bool HourMeter::saveToStorage(const T &data)
     {
         EEPROM.put(STORAGE_ADDRESS_SETTINGS, data);
     }
+
     else
     {
         return false;
     }
-
-    // EEPROM.commit();
-
-    return true;
 }

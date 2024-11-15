@@ -145,7 +145,7 @@ static void dataAcquisition(void *pvParam)
             Serial.printf("Hour Meter\t\t= %ld s\n", data.hourMeter);
             Serial.printf("============================================\n");
             Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID);
-            Serial.printf("[setting] threshold HM\t\t: %d\n", setting.thresholdHM);
+            Serial.printf("[setting] threshold HM\t\t: %d V\n", setting.thresholdHM);
             Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
             Serial.printf("============================================\n");
 
@@ -283,10 +283,6 @@ static void serialConfig(void *pvParam)
     // NOTE: TURN OFF GPS SWITCH
     while (1)
     {
-        // TODO: Print RS485 input
-        // TODO: Parse
-        // TODO: update to EEPROM
-
         if (Serial.available())
         {
             String uartInput = Serial.readStringUntil('\n');
@@ -294,10 +290,13 @@ static void serialConfig(void *pvParam)
 
             if (!uartInput.isEmpty())
             {
-                // xSemaphoreTake(configMutex, portMAX_DELAY); // Lock the mutex
                 updateConfigFromUART(setting, uartInput);
-                // xSemaphoreGive(configMutex); // Release the mutex
                 Serial.println("Config updated from UART input.");
+
+                vTaskDelay(pdMS_TO_TICKS(1000));
+
+                // save the config to littlefs
+                hm->saveSettings(setting);
             }
         }
         vTaskDelay(50 / portTICK_PERIOD_MS); // Short delay
