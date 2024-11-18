@@ -29,7 +29,6 @@ static void setCustomBeacon();
 static void updateConfigFromUART(Setting_t &setting, const String &input);
 
 /* FORWARD DECLARATION UNTUK HANDLER DAN SEMAPHORE RTOS */
-// TaskHandle_t RTCDemoHandler = NULL;
 TaskHandle_t dataAcquisitionHandler = NULL;
 TaskHandle_t sendBLEDataHandler = NULL;
 TaskHandle_t retrieveGPSHandler = NULL;
@@ -37,14 +36,13 @@ TaskHandle_t sendToRS485Handler = NULL;
 TaskHandle_t countingHMHandler = NULL;
 TaskHandle_t settingUARTHandler = NULL;
 SemaphoreHandle_t xSemaphore = NULL;
+// TaskHandle_t RTCDemoHandler = NULL;
 
 /* GLOBAL VARIABLES */
 BLEAdvertising *pAdvertising;
 BeaconData_t data;
 HardwareSerial modbus(1);
-// time_t currentHourMeter = 0;
 Setting_t setting;
-// TODO: Declare Setting_t
 
 void setup()
 {
@@ -98,10 +96,10 @@ void setup()
     Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
 
     // xTaskCreatePinnedToCore(RTCDemo, "RTC Demo", 2048, NULL, 3, &RTCDemoHandler, 1); // TODO: Depreciating
+    // xTaskCreatePinnedToCore(sendToRS485, "send data to RS485", 2048, NULL, 3, &sendToRS485Handler, 0);
     xTaskCreatePinnedToCore(dataAcquisition, "Data Acquisition", 4096, NULL, 3, &dataAcquisitionHandler, 1);
     xTaskCreatePinnedToCore(sendBLEData, "Send BLE Data", 2048, NULL, 3, &sendBLEDataHandler, 0);
     xTaskCreatePinnedToCore(retrieveGPSData, "get GPS Data", 4096, NULL, 4, &retrieveGPSHandler, 1);
-    // xTaskCreatePinnedToCore(sendToRS485, "send data to RS485", 2048, NULL, 3, &sendToRS485Handler, 0);
     xTaskCreatePinnedToCore(countingHourMeter, "Updating Hour Meter", 8192, NULL, 3, &countingHMHandler, 0);
     xTaskCreatePinnedToCore(serialConfig, "Updating setting", 4096, NULL, 3, &settingUARTHandler, 1);
 }
@@ -281,8 +279,8 @@ static void sendToRS485(void *pvParam)
 static void serialConfig(void *pvParam)
 {
     // NOTE: TURN OFF GPS SWITCH
-    TickType_t startTime = xTaskGetTickCount(); // Record the start time
-    TickType_t duration = pdMS_TO_TICKS(60000 / 4); // 1 minute = 60000 ms
+    TickType_t startTime = xTaskGetTickCount();     // Record the start time
+    TickType_t duration = pdMS_TO_TICKS(60000 / 4); // 15 seconds
 
     while (1)
     {
@@ -321,16 +319,10 @@ static void countingHourMeter(void *pvParam)
     time_t runTimeAccrued = 0;
     bool isCounting = false; // Tracks if counting has started
 
-    // startTime = rtc->now();
-    // Serial.printf("[HM] Dozing Counter started at %02d:%02d:%02d\n",
-    //               startTime.hour(), startTime.minute(), startTime.second());
-
     while (1)
     {
         if (data.voltageSupply >= setting.thresholdHM)
         {
-            // Serial.printf("[HM] Start Time : \n");
-            // Serial.printf("Polling Time: %ld s, Start Time: %lu s\n", pollingTime.secondstime(), startTime.secondstime());
             if (!isCounting)
             {
                 // Initialize startTime when counting begins
@@ -345,7 +337,6 @@ static void countingHourMeter(void *pvParam)
 
             data.hourMeter += runTimeAccrued;
 
-            // Serial.printf("[HM] this machine has running hour of %ld s\n", data.hourMeter);
             Serial.printf("[HM] Hour Meter is updated\n");
 
             if (hm->saveToStorage(data.hourMeter))
@@ -371,30 +362,53 @@ static void countingHourMeter(void *pvParam)
 
 static void updateConfigFromUART(Setting_t &setting, const String &input)
 {
-    int firstComma = input.indexOf(',');
-    int secondComma = input.indexOf(',', firstComma + 1);
-    int thirdComma = input.indexOf(',', secondComma + 1);
-
-    if (firstComma > 0)
+    // Check if input starts with "CONFIG"
+    if (input.startsWith("CONFIG"))
     {
-        setting.ID = input.substring(0, firstComma);
+        // Remove "CONFIG" from the string
+        String tail = input.substring(input.indexOf(',') + 1);
+
+        // Now, tail holds everything after "CONFIG", such as "CD0002,24,0.1,987,DONE"
+
+        // Find the positions of the commas
+        int firstComma = tail.indexOf(',');
+        int secondComma = tail.indexOf(',', firstComma + 1);
+        int thirdComma = tail.indexOf(',', secondComma + 1);
+        int fourthComma = tail.indexOf(',', thirdComma + 1);
+
+        // Parse each part of the string after "CONFIG"
+        if (firstComma > 0)
+        {
+            setting.ID = tail.substring(0, firstComma); // Extract ID
+        }
+
+        if (secondComma > firstComma + 1)
+        {
+            String thresholdPart = tail.substring(firstComma + 1, secondComma);
+            setting.thresholdHM = thresholdPart.toInt(); // Extract threshold value
+        }
+
+        if (thirdComma > secondComma + 1)
+        {
+            String offsetPart = tail.substring(secondComma + 1, thirdComma);
+            setting.offsetAnalogInput = offsetPart.toFloat(); // Extract offset value
+        }
+
+        if (fourthComma > thirdComma + 1)
+        {
+            String hourMeterPart = tail.substring(thirdComma + 1, fourthComma);
+            data.hourMeter = hourMeterPart.toInt(); // Extract hour meter value
+        }
+
+        // Extract the last part (Done)
+        String donePart = tail.substring(fourthComma + 1);
+        if (donePart == "DONE")
+        {
+            Serial.println("[UART] Config update complete.");
+        }
     }
-
-    if (secondComma > firstComma + 1)
+    else
     {
-        String thresholdPart = input.substring(firstComma + 1, secondComma);
-        setting.thresholdHM = thresholdPart.toInt();
-    }
-
-    if (thirdComma > secondComma + 1)
-    {
-        String offsetPart = input.substring(secondComma + 1);
-        setting.offsetAnalogInput = offsetPart.toFloat();
-    }
-
-    if (thirdComma + 1 < input.length())
-    {
-        String hourMeterPart = input.substring(thirdComma + 1);
-        data.hourMeter = hourMeterPart.toInt(); // Convert to time_t or long
+        Serial.println("[UART] Invalid input, expected 'CONFIG' at the start.");
     }
 }
