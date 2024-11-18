@@ -10,6 +10,7 @@
 #include "common.h"
 #include "gps.h"
 #include "hour_meter_manager.h"
+#include "id_management.h"
 
 /* DEKLARASI OBJEK YANG DIGUNAKAN TERSIMPAN DI HEAP */
 RTC *rtc;
@@ -175,13 +176,20 @@ static void setCustomBeacon()
 
     /* PROCESSING DATA SEBELUM DIKIRIM MELALUI BLE */
     char beacon_data[19];
+
+    // Processing ID
+    ListID_t id;
+    uint16_t number;
+
+    extractBeaconID(std::string(setting.ID.c_str()), id, number);
+
     uint16_t volt = data.voltageSupply * 1000; // 3300mV = 3.3V
     int32_t latitudeFixedPoint = (int32_t)(data.gps.latitude * 256);
     int32_t longitudeFixedPoint = (int32_t)(data.gps.longitude * 256);
 
-    beacon_data[0] = 0x01; // Eddystone Frame Type (Unencrypted Eddystone-TLM)
-    beacon_data[1] = 0x00; // TLM version
-    beacon_data[2] = 0x01;
+    beacon_data[0] = static_cast<uint8_t>(id);                   // List ID
+    beacon_data[1] = ((number & 0xFF00) >> 8);                     // Upper ID Digit
+    beacon_data[2] = (number & 0xFF);                            // Lower ID Digit
     beacon_data[3] = (volt >> 8);                                // Battery voltage, 1 mV/bit i.e. 0xCE4 = 3300mV = 3.3V
     beacon_data[4] = (volt & 0xFF);                              //
     beacon_data[5] = 0;                                          // Eddystone Frame Type (Unencrypted Eddystone-TLM)

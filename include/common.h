@@ -13,7 +13,8 @@ struct GPSData_t
     char status;
 };
 
-struct BeaconData_t {
+struct BeaconData_t
+{
     GPSData_t gps;
     float voltageSupply;
     time_t hourMeter;
@@ -24,4 +25,33 @@ struct Setting_t
     String ID;
     uint8_t thresholdHM;
     float offsetAnalogInput;
+};
+
+enum ListID_t
+{
+    AC = 0,
+    CC,
+    CD,
+    CE,
+    CG,
+    CO,
+    CT,
+    DP,
+    FL,
+    LS,
+    MC,
+    MS,
+    PP,
+    ST,
+    TH,
+    TL,
+    WT,
+    XCD,
+    XCE,
+    XCT,
+    XDP,
+    XMC,
+    XST,
+    XWT,
+    UNKNOWN,
 };
