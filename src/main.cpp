@@ -250,7 +250,7 @@ static void retrieveGPSData(void *pvParam)
         if ((gps->getCharProcessed()) < 10)
         {
             Serial.println("[GPS] GPS module not sending data, check wiring or module power");
-            data.gps.status = 'A';
+            data.gps.status = 'V';
         }
         else
         {
@@ -258,12 +258,12 @@ static void retrieveGPSData(void *pvParam)
             {
                 Serial.printf("[GPS] Latitude : %f", data.gps.latitude);
                 Serial.printf("[GPS] Longitude : %f", data.gps.longitude);
-                data.gps.status = 'V';
+                data.gps.status = 'A';
             }
             else
             {
                 Serial.println("[GPS] GPS is searching for a signal...");
-                data.gps.status = 'A';
+                data.gps.status = 'V';
             }
         }
 
