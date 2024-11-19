@@ -3,8 +3,10 @@
 #include <Arduino.h>
 #include <Adafruit_ADS1X15.h>
 #include <SPI.h>
+#include "common.h"
 
-enum class AnalogPin : uint8_t {
+enum class AnalogPin : uint8_t
+{
     PIN_A0 = 0,
     PIN_A1 = 1,
     PIN_A2 = 2,
@@ -23,3 +25,5 @@ public:
 private:
     Adafruit_ADS1115 _ads;
 };
+
+extern float scaleAdjusted;

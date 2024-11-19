@@ -44,6 +44,7 @@ BLEAdvertising *pAdvertising;
 BeaconData_t data;
 HardwareSerial modbus(1);
 Setting_t setting;
+float scaleAdjusted;
 
 void setup()
 {
@@ -95,6 +96,7 @@ void setup()
     Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID);
     Serial.printf("[setting] threshold HM\t\t: %d\n", setting.thresholdHM);
     Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
+    scaleAdjusted = setting.offsetAnalogInput;
 
     // xTaskCreatePinnedToCore(RTCDemo, "RTC Demo", 2048, NULL, 3, &RTCDemoHandler, 1); // TODO: Depreciating
     // xTaskCreatePinnedToCore(sendToRS485, "send data to RS485", 2048, NULL, 3, &sendToRS485Handler, 0);
@@ -403,6 +405,7 @@ static void updateConfigFromUART(Setting_t &setting, const String &input)
         {
             String offsetPart = tail.substring(secondComma + 1, thirdComma);
             setting.offsetAnalogInput = offsetPart.toFloat(); // Extract offset value
+            scaleAdjusted = setting.offsetAnalogInput;
         }
 
         if (fourthComma > thirdComma + 1)
