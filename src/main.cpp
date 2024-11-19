@@ -70,7 +70,7 @@ void setup()
     gps = new GPS();
     data.gps.latitude = 0;
     data.gps.longitude = 0;
-    data.gps.status = 'A';
+    data.gps.status = 'V';
 
     /* RS485 INIT */
     Serial.println("[485] Inisialisasi RS485");
@@ -188,9 +188,9 @@ static void setCustomBeacon()
     int32_t longitudeFixedPoint = (int32_t)(data.gps.longitude * 256);
 
     beacon_data[0] = static_cast<uint8_t>(id);                   // List ID
-    beacon_data[1] = ((number & 0xFF00) >> 8);                     // Upper ID Digit
+    beacon_data[1] = ((number & 0xFF00) >> 8);                   // Upper ID Digit
     beacon_data[2] = (number & 0xFF);                            // Lower ID Digit
-    beacon_data[3] = (volt >> 8);                                // Battery voltage, 1 mV/bit i.e. 0xCE4 = 3300mV = 3.3V
+    beacon_data[3] = ((volt & 0xFF00) >> 8);                     // Battery voltage, 1 mV/bit i.e. 0xCE4 = 3300mV = 3.3V
     beacon_data[4] = (volt & 0xFF);                              //
     beacon_data[5] = 0;                                          // Eddystone Frame Type (Unencrypted Eddystone-TLM)
     beacon_data[6] = data.gps.status;                            //
@@ -248,6 +248,7 @@ static void retrieveGPSData(void *pvParam)
         if ((gps->getCharProcessed()) < 10)
         {
             Serial.println("[GPS] GPS module not sending data, check wiring or module power");
+            data.gps.status = 'A';
         }
         else
         {
@@ -255,10 +256,12 @@ static void retrieveGPSData(void *pvParam)
             {
                 Serial.printf("[GPS] Latitude : %f", data.gps.latitude);
                 Serial.printf("[GPS] Longitude : %f", data.gps.longitude);
+                data.gps.status = 'V';
             }
             else
             {
                 Serial.println("[GPS] GPS is searching for a signal...");
+                data.gps.status = 'A';
             }
         }
 
