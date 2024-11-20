@@ -5,7 +5,6 @@
 #define PIN_RX_RS485 18
 #define PIN_TX_RS485 19
 
-// New Way
 struct GPSData_t
 {
     double longitude;
@@ -13,7 +12,8 @@ struct GPSData_t
     char status;
 };
 
-struct BeaconData_t {
+struct BeaconData_t
+{
     GPSData_t gps;
     float voltageSupply;
     time_t hourMeter;
@@ -21,9 +21,36 @@ struct BeaconData_t {
 
 struct Setting_t
 {
-    // TODO: Adjust the type data
-    int32_t settingDevice;
-    int32_t voltageThreshold;
-    int32_t codeUnit;
-    int32_t offsetThreshold;
+    String ID;
+    uint8_t thresholdHM;
+    float offsetAnalogInput;
+};
+
+enum ListID_t
+{
+    AC = 0,
+    CC,
+    CD,
+    CE,
+    CG,
+    CO,
+    CT,
+    DP,
+    FL,
+    LS,
+    MC,
+    MS,
+    PP,
+    ST,
+    TH,
+    TL,
+    WT,
+    XCD,
+    XCE,
+    XCT,
+    XDP,
+    XMC,
+    XST,
+    XWT,
+    UNKNOWN,
 };

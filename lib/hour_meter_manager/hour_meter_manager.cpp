@@ -4,12 +4,12 @@ HourMeter::HourMeter(uint8_t format_on_fail)
 {
     if (LittleFS.begin(format_on_fail))
     {
-        Serial.printf("Storage has been allocated\n");
+        Serial.println("Storage has been allocated");
         checkAndCreateFiles();
     }
     else
     {
-        Serial.printf("Failed to allocate storage\n");
+        Serial.println("Failed to allocate storage");
     }
 }
 
@@ -19,46 +19,44 @@ HourMeter::~HourMeter()
 
 void HourMeter::checkAndCreateFiles()
 {
-    // Check and create data.txt
+    // Check and create /data.txt
     if (!LittleFS.exists("/data.txt"))
     {
-        // Create data.txt and write initial value
-        File file = LittleFS.open("/littlefs/data.txt", "w"); // Open for writing (creates if not exists)
+        File file = LittleFS.open("/data.txt", "w"); // Open for writing (creates if not exists)
         if (file)
         {
             file.println("0"); // Write initial value
             file.close();      // Close the file
-            Serial.println("Created data.txt with initial value 0");
+            Serial.println("Created /data.txt with initial value 0");
         }
         else
         {
-            Serial.println("Failed to create data.txt");
+            Serial.println("Failed to create /data.txt");
         }
     }
     else
     {
-        Serial.println("data.txt already exists");
+        Serial.println("/data.txt already exists");
     }
 
-    // Check and create setting.txt
+    // Check and create /setting.txt
     if (!LittleFS.exists("/setting.txt"))
     {
-        // Create setting.txt and write initial value
-        File file = LittleFS.open("/littlefs/setting.txt", "w"); // Open for writing (creates if not exists)
+        File file = LittleFS.open("/setting.txt", "w"); // Open for writing (creates if not exists)
         if (file)
         {
             file.println("0"); // Write initial value
             file.close();      // Close the file
-            Serial.println("Created setting.txt with initial value 0");
+            Serial.println("Created /setting.txt with initial value 0");
         }
         else
         {
-            Serial.println("Failed to create setting.txt");
+            Serial.println("Failed to create /setting.txt");
         }
     }
     else
     {
-        Serial.println("setting.txt already exists");
+        Serial.println("/setting.txt already exists");
     }
 }
 
@@ -69,26 +67,95 @@ void HourMeter::checkAndCreateFiles()
 
 time_t HourMeter::loadHMFromStorage()
 {
-    time_t hourMeter;
-    // EEPROM.get(STORAGE_ADDRESS_HOUR_METER, hourMeter);
+    time_t hourMeter = 0;
+    Serial.println("Attempting to open data.txt for reading...");
 
-    Serial.println("about to open data.txt");
     FILE *file = fopen("/littlefs/data.txt", "r");
     if (file)
     {
-        fscanf(file, "%ld", &hourMeter); // Read a single float value
+        // Attempt to read the time value from the file
+        if (fscanf(file, "%ld", &hourMeter) == 1) // Check that exactly one value is read
+        {
+            Serial.printf("Successfully read hour meter value: %ld\n", hourMeter);
+        }
+        else
+        {
+            Serial.println("Data format error: unable to read a valid time value.");
+            hourMeter = 0; // Reset to a default or error-indicating value
+        }
+
         fclose(file);
     }
     else
     {
-        Serial.println("Failed to open data.txt for reading");
+        Serial.println("Error: Could not open data.txt for reading.");
     }
 
     return hourMeter;
 }
 
-Setting_t HourMeter::loadSettingFromStorage()
+Setting_t HourMeter::loadSetting()
 {
-    Setting_t dummy{-1};
-    return dummy;
+    Setting_t setting;
+    Serial.println("Attempting to open settings.json for reading...");
+
+    File file = LittleFS.open("/settings.json", "r");
+
+    if (file)
+    {
+        JsonDocument doc;
+
+        DeserializationError error = deserializeJson(doc, file);
+        if (error)
+        {
+            Serial.print("Data format error: Failed to parse JSON in settings.json: ");
+            Serial.println(error.c_str());
+            file.close();
+            return setting; // Return with default or previously set values
+        }
+
+        // Extract values from JSON if successfully parsed
+        setting.ID = doc["ID"].as<String>();
+        setting.thresholdHM = doc["thresholdHM"].as<uint8_t>();
+        setting.offsetAnalogInput = doc["offsetAnalogInput"].as<float>();
+
+        Serial.println("Successfully read settings from settings.json");
+        file.close();
+    }
+    else
+    {
+        Serial.println("Error: Could not open settings.json for reading.");
+    }
+
+    return setting;
+}
+
+void HourMeter::saveSettings(const Setting_t &setting)
+{
+    // Create a JSON document
+    JsonDocument doc;
+
+    // Populate the JSON document with the Setting_t data
+    doc["ID"] = setting.ID;
+    doc["thresholdHM"] = setting.thresholdHM;
+    doc["offsetAnalogInput"] = setting.offsetAnalogInput;
+
+    // Open settings.json file for writing
+    File file = LittleFS.open("/settings.json", "w");
+    if (!file)
+    {
+        Serial.println("Failed to open settings.json for writing");
+        return;
+    }
+
+    // Serialize JSON to file
+    if (serializeJson(doc, file) == 0)
+    {
+        Serial.println("Failed to write JSON to file");
+        file.close();
+        return;
+    }
+
+    file.close(); // Close file after writing
+    Serial.println("Settings saved to settings.json");
 }
