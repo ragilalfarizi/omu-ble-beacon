@@ -11,6 +11,8 @@
 #include "gps.h"
 #include "hour_meter_manager.h"
 #include "id_management.h"
+#include "check_sleep.h"
+#include <numeric>
 
 /* DEKLARASI OBJEK YANG DIGUNAKAN TERSIMPAN DI HEAP */
 RTC *rtc;
@@ -26,8 +28,9 @@ static void retrieveGPSData(void *pvParam);
 static void sendToRS485(void *pvParam);
 static void countingHourMeter(void *pvParam);
 static void serialConfig(void *pvParam);
+static void checkDeepSleepTask(void *param);
 static void setCustomBeacon();
-static void updateConfigFromUART(Setting_t &setting, const String &input);
+static bool updateConfigFromUART(Setting_t &setting, const String &input);
 
 /* FORWARD DECLARATION UNTUK HANDLER DAN SEMAPHORE RTOS */
 TaskHandle_t dataAcquisitionHandler = NULL;
@@ -36,7 +39,9 @@ TaskHandle_t retrieveGPSHandler = NULL;
 TaskHandle_t sendToRS485Handler = NULL;
 TaskHandle_t countingHMHandler = NULL;
 TaskHandle_t settingUARTHandler = NULL;
+TaskHandle_t checkSleepHandler = NULL;
 SemaphoreHandle_t xSemaphore = NULL;
+SemaphoreHandle_t dataReadySemaphore = NULL;
 // TaskHandle_t RTCDemoHandler = NULL;
 
 /* GLOBAL VARIABLES */
@@ -52,6 +57,11 @@ void setup()
     Serial.begin(9600);
     Serial.println("[Serial] Mesin dinyalakan");
 
+    /* DEEP SLEEP INIT */
+    printWakeupReason();
+    pinMode(PIN_EN_READ_BATT_VOLT, OUTPUT);
+    pinMode(PIN_READ_BATT_VOLT, INPUT);
+
     /* RTC INIT */
     Serial.println("[RTC] Inisialisasi RTC");
     rtc = new RTC();
@@ -65,6 +75,7 @@ void setup()
     Serial.println("[AIN] Inisialisasi Analog Input");
     ain = new AnalogInput();
     data.voltageSupply = ain->readAnalogInput(AnalogPin::PIN_A0); // untuk membaca di pin_a0 (PIN 1 pada silkscreen)
+    Serial.printf("DATA VOLTAGE SUPPLY DARI SETUP : %f\n", data.voltageSupply);
 
     /* GPS INIT */
     Serial.println("[GPS] Inisialisasi GPS");
@@ -79,6 +90,8 @@ void setup()
 
     xSemaphore = xSemaphoreCreateBinary();
     xSemaphoreGive(xSemaphore);
+    dataReadySemaphore = xSemaphoreCreateBinary();
+    xSemaphoreGive(dataReadySemaphore);
 
     /* BLE INIT */
     BLEDevice::init("OMU BLE BEACON");
@@ -105,6 +118,7 @@ void setup()
     xTaskCreatePinnedToCore(retrieveGPSData, "get GPS Data", 4096, NULL, 4, &retrieveGPSHandler, 1);
     xTaskCreatePinnedToCore(countingHourMeter, "Updating Hour Meter", 8192, NULL, 3, &countingHMHandler, 0);
     xTaskCreatePinnedToCore(serialConfig, "Updating setting", 4096, NULL, 3, &settingUARTHandler, 1);
+    xTaskCreatePinnedToCore(checkDeepSleepTask, "Check Deep Sleep", 4096, NULL, 1, &settingUARTHandler, 1);
 }
 
 void loop()
@@ -132,7 +146,7 @@ static void dataAcquisition(void *pvParam)
 {
     while (1)
     {
-        if (xSemaphoreTake(xSemaphore, portMAX_DELAY))
+        if (xSemaphoreTake(dataReadySemaphore, portMAX_DELAY) == pdTRUE)
         {
             data.gps.latitude = gps->getlatitude();
             data.gps.longitude = gps->getLongitude();
@@ -150,7 +164,7 @@ static void dataAcquisition(void *pvParam)
             Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
             Serial.printf("============================================\n");
 
-            xSemaphoreGive(xSemaphore);
+            xSemaphoreGive(dataReadySemaphore);
             vTaskDelay(pdMS_TO_TICKS(1000));
         }
     }
@@ -301,14 +315,20 @@ static void serialConfig(void *pvParam)
 
             if (!uartInput.isEmpty())
             {
-                updateConfigFromUART(setting, uartInput);
-                Serial.println("Config updated from UART input.");
+                if (updateConfigFromUART(setting, uartInput))
+                {
 
-                vTaskDelay(pdMS_TO_TICKS(1000));
+                    // save the config to littlefs
+                    hm->saveSettings(setting);
+                    hm->saveToStorage(data.hourMeter);
 
-                // save the config to littlefs
-                hm->saveSettings(setting);
-                hm->saveToStorage(data.hourMeter);
+                    Serial.println("Config updated from UART input.");
+                }
+                else
+                {
+
+                    vTaskDelay(pdMS_TO_TICKS(1000));
+                }
             }
         }
 
@@ -363,7 +383,7 @@ static void countingHourMeter(void *pvParam)
     }
 }
 
-static void updateConfigFromUART(Setting_t &setting, const String &input)
+static bool updateConfigFromUART(Setting_t &setting, const String &input)
 {
     // Check if input starts with "CONFIG"
     if (input.startsWith("CONFIG"))
@@ -410,9 +430,89 @@ static void updateConfigFromUART(Setting_t &setting, const String &input)
         {
             Serial.println("[UART] Config update complete.");
         }
+
+        return true;
     }
     else
     {
         Serial.println("[UART] Invalid input, expected 'CONFIG' at the start.");
+        return false;
+    }
+}
+
+static void checkDeepSleepTask(void *param)
+{
+    std::vector<float> batteryVoltageReadings;
+
+    while (1)
+    {
+        if (xSemaphoreTake(dataReadySemaphore, portMAX_DELAY) == pdTRUE)
+        {
+            if (data.voltageSupply > LOWEST_ANALOG_THRESHOLD)
+            {
+                Serial.println("Adapter is plugged in. Keeping system running.");
+            }
+            else
+            {
+                Serial.printf("Analog Input is less than %.2f V. Reading the battery voltage..\n", LOWEST_ANALOG_THRESHOLD);
+
+                // enable pin to read battery voltage
+                digitalWrite(PIN_EN_READ_BATT_VOLT, HIGH);
+                vTaskDelay(pdMS_TO_TICKS(100));
+
+                // Monitor battery voltage for 15 seconds
+                unsigned long startTime = millis();
+                int voltageSum = 0;
+                int readingsCount = 0;
+
+                while (millis() - startTime < MONITOR_DURATION)
+                {
+                    int16_t batteryADC = analogRead(PIN_READ_BATT_VOLT);
+                    float batteryVoltage = calculateBatteryVoltage(batteryADC);
+                    Serial.printf("batteryVoltage : %.2f\n", batteryVoltage);
+
+                    batteryVoltageReadings.push_back(batteryVoltage);
+
+                    // voltageSum += batteryVoltage;
+                    // readingsCount++;
+                    delay(500); // Read battery voltage every 500ms
+                }
+
+                // Calculate the average battery voltage
+                float sum = std::accumulate(batteryVoltageReadings.begin(), batteryVoltageReadings.end(), 0.0f);
+                Serial.printf("Sum of Batt Voltage : %f\n", sum);
+
+                size_t vectorSize = batteryVoltageReadings.size();
+                Serial.printf("Size of Batt Voltage Vector : %d\n", vectorSize);
+
+                float averageVoltage = sum / vectorSize;
+                Serial.print("Average Voltage: ");
+                Serial.println(averageVoltage);
+
+                // Check if average voltage is below the threshold
+                if (averageVoltage < BATTERY_THRESHOLD)
+                {
+                    Serial.println("Battery voltage is critically low. Entering deep sleep...");
+
+                    // PIN CHG_STS will be low when the adaptor is plugged in again.
+                    esp_sleep_enable_ext0_wakeup(GPIO_NUM_35, 0); // 1 = High, 0 = Low
+                    digitalWrite(PIN_EN_READ_BATT_VOLT, LOW);     // Recontrol pin before sleeping
+                    batteryVoltageReadings.clear();
+
+                    vTaskDelay(pdMS_TO_TICKS(100));
+
+                    esp_deep_sleep_start();
+                }
+                else
+                {
+                    batteryVoltageReadings.clear();
+                    Serial.println("Battery voltage is sufficient. Continuing operation...");
+                }
+            }
+
+            xSemaphoreGive(dataReadySemaphore);
+            // Small delay to prevent task starvation
+            vTaskDelay(pdMS_TO_TICKS(500));
+        }
     }
 }
