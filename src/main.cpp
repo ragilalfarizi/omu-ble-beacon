@@ -270,8 +270,8 @@ static void retrieveGPSData(void *pvParam)
         {
             if (isValid)
             {
-                Serial.printf("[GPS] Latitude : %f", data.gps.latitude);
-                Serial.printf("[GPS] Longitude : %f", data.gps.longitude);
+                Serial.printf("[GPS] Latitude : %f\n", data.gps.latitude);
+                Serial.printf("[GPS] Longitude : %f\n", data.gps.longitude);
                 data.gps.status = 'A';
             }
             else
