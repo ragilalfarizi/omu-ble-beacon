@@ -306,6 +306,10 @@ static void sendToRS485(void *pvParam)
 static void serialConfig(void *pvParam)
 {
     // NOTE: TURN OFF GPS SWITCH
+    // NOTE: TURN OFF GPS SWITCH
+    TickType_t startTime = xTaskGetTickCount();     // Record the start time
+    TickType_t duration = pdMS_TO_TICKS(60000 / 4); // 15 seconds
+
     while (1)
     {
         if (Serial.available())
@@ -326,10 +330,16 @@ static void serialConfig(void *pvParam)
                 }
                 else
                 {
-
                     vTaskDelay(pdMS_TO_TICKS(1000));
                 }
             }
+        }
+
+        // Check if 1 minute has passed
+        if (xTaskGetTickCount() - startTime >= duration)
+        {
+            Serial.println("Serial config task timeout reached. Deleting task.");
+            vTaskDelete(NULL); // Delete the task after 1 minute
         }
 
         vTaskDelay(pdMS_TO_TICKS(50));
