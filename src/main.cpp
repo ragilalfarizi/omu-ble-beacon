@@ -148,8 +148,8 @@ static void dataAcquisition(void *pvParam)
     {
         if (xSemaphoreTake(dataReadySemaphore, portMAX_DELAY) == pdTRUE)
         {
-            data.gps.latitude = gps->getlatitude();
-            data.gps.longitude = gps->getLongitude();
+            // data.gps.latitude = gps->getlatitude();
+            // data.gps.longitude = gps->getLongitude();
             data.voltageSupply = ain->readAnalogInput(AnalogPin::PIN_A0);
 
             Serial.printf("============================================\n");
@@ -247,9 +247,9 @@ static void sendBLEData(void *pvParam)
  * */
 static void retrieveGPSData(void *pvParam)
 {
-    bool isValid = false;
+    // bool isValid = false;
 
-    while (1) // void loop
+    while (1)
     {
         Serial.println("[GPS] encoding...");
 
@@ -259,7 +259,7 @@ static void retrieveGPSData(void *pvParam)
             gps->encode(gpsChar);
         }
 
-        isValid = gps->getValidation();
+        // isValid = gps->getValidation();
 
         if ((gps->getCharProcessed()) < 10)
         {
@@ -268,15 +268,23 @@ static void retrieveGPSData(void *pvParam)
         }
         else
         {
-            if (isValid)
+            if (gps->location.isUpdated())
             {
-                Serial.printf("[GPS] Latitude : %f\n", data.gps.latitude);
-                Serial.printf("[GPS] Longitude : %f\n", data.gps.longitude);
+                float latitude = static_cast<float>(gps->location.lat());
+                float longitude = static_cast<float>(gps->location.lng());
+
+                Serial.printf("[GPS] Latitude : %f\n", latitude);
+                Serial.printf("[GPS] Longitude : %f\n", longitude);
+
+                data.gps.latitude = latitude;
+                data.gps.latitude = longitude;
                 data.gps.status = 'A';
             }
             else
             {
                 Serial.println("[GPS] GPS is searching for a signal...");
+                // data.gps.latitude = 0.00f;
+                // data.gps.latitude = 0.00f;
                 data.gps.status = 'V';
             }
         }
