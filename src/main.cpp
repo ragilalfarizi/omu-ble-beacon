@@ -94,7 +94,7 @@ void setup()
     xSemaphoreGive(dataReadySemaphore);
 
     /* BLE INIT */
-    BLEDevice::init("OMU BLE BEACON");
+    BLEDevice::init("UMO BEACON");
     BLEDevice::setPower(ESP_PWR_LVL_N12);
     pAdvertising = BLEDevice::getAdvertising();
 
