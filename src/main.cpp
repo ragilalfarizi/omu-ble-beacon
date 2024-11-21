@@ -94,7 +94,7 @@ void setup()
     xSemaphoreGive(dataReadySemaphore);
 
     /* BLE INIT */
-    BLEDevice::init("UMO BEACON");
+    BLEDevice::init("");
     BLEDevice::setPower(ESP_PWR_LVL_N12);
     pAdvertising = BLEDevice::getAdvertising();
 
@@ -224,7 +224,7 @@ static void setCustomBeacon()
     beacon_data[18] = (data.hourMeter & 0xFF);                   //
 
     oScanResponseData.setServiceData(BLEUUID(beaconUUID), std::string(beacon_data, sizeof(beacon_data)));
-    oAdvertisementData.setName("OMU Demo Data");
+    oAdvertisementData.setName("UMO BEACON");
     pAdvertising->setAdvertisementData(oAdvertisementData);
     pAdvertising->setScanResponseData(oScanResponseData);
 }
