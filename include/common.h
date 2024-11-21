@@ -7,8 +7,8 @@
 
 struct GPSData_t
 {
-    double longitude;
-    double latitude;
+    float longitude;
+    float latitude;
     char status;
 };
 
