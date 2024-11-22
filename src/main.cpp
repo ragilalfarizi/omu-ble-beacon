@@ -256,7 +256,7 @@ static void setCustomBeacon()
     beacon_data[18] = (data.hourMeter & 0xFF);                   //
 
     oScanResponseData.setServiceData(BLEUUID(beaconUUID), std::string(beacon_data, sizeof(beacon_data)));
-    oAdvertisementData.setName("OMU Demo Data");
+    oAdvertisementData.setName("UMO BEACON");
     pAdvertising->setAdvertisementData(oAdvertisementData);
     pAdvertising->setScanResponseData(oScanResponseData);
 }
