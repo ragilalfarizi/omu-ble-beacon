@@ -144,14 +144,46 @@ static void RTCDemo(void *pvParam)
 
 static void dataAcquisition(void *pvParam)
 {
+    float previousLatitude = 0.0, previousLongitude = 0.0;
+    int stallCounter = 0; // Time spent stalled in milliseconds
+    bool latitudeStalled = false, longitudeStalled = false;
+
     while (1)
     {
         if (xSemaphoreTake(dataReadySemaphore, portMAX_DELAY) == pdTRUE)
         {
-            // data.gps.latitude = gps->getlatitude();
-            // data.gps.longitude = gps->getLongitude();
             data.voltageSupply = ain->readAnalogInput(AnalogPin::PIN_A0);
 
+            float currentLatitude = gps->getlatitude();
+            float currentLongitude = gps->getLongitude();
+
+            // Check for changes
+            latitudeStalled = fabs(currentLatitude - previousLatitude) < 0.00000001; // Adjust threshold if needed
+            longitudeStalled = fabs(currentLongitude - previousLongitude) < 0.00000001;
+
+            if (latitudeStalled && longitudeStalled)
+            {
+                ; // Increment by task delay
+                if (stallCounter >= STALL_TOLERANCE_MS)
+                {
+                    data.gps.status = 'V'; // Mark as invalid after tolerance
+                }
+            }
+            else
+            {
+                stallCounter = 0;      // Reset counter if data changes
+                data.gps.status = 'A'; // Mark as active
+            }
+
+            // Store current values for next comparison
+            previousLatitude = currentLatitude;
+            previousLongitude = currentLongitude;
+
+            // Save data
+            data.gps.latitude = currentLatitude;
+            data.gps.longitude = currentLongitude;
+
+            // Print output
             Serial.printf("============================================\n");
             Serial.printf("GPS STATUS\t\t= %c\n", data.gps.status);
             Serial.printf("GPS LATITUDE\t\t= %f\n", data.gps.latitude);
@@ -165,7 +197,7 @@ static void dataAcquisition(void *pvParam)
             Serial.printf("============================================\n");
 
             xSemaphoreGive(dataReadySemaphore);
-            vTaskDelay(pdMS_TO_TICKS(1000));
+            vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for 1 second
         }
     }
 }
