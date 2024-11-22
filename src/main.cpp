@@ -185,10 +185,15 @@ static void dataAcquisition(void *pvParam)
 
             // Print output
             Serial.printf("============================================\n");
-            Serial.printf("GPS STATUS              = %c\n", data.gps.status);
-            Serial.printf("GPS LATITUDE            = %f\n", data.gps.latitude);
-            Serial.printf("GPS LONGITUDE           = %f\n", data.gps.longitude);
-            Serial.printf("Analog Input            = %.2f V\n", data.voltageSupply);
+            Serial.printf("GPS STATUS\t\t= %c\n", data.gps.status);
+            Serial.printf("GPS LATITUDE\t\t= %f\n", data.gps.latitude);
+            Serial.printf("GPS LONGITUDE\t\t= %f\n", data.gps.longitude);
+            Serial.printf("Analog Input\t\t= %.2f V\n", data.voltageSupply);
+            Serial.printf("Hour Meter\t\t= %ld s\n", data.hourMeter);
+            Serial.printf("============================================\n");
+            Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID);
+            Serial.printf("[setting] threshold HM\t\t: %d V\n", setting.thresholdHM);
+            Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
             Serial.printf("============================================\n");
 
             xSemaphoreGive(dataReadySemaphore);
