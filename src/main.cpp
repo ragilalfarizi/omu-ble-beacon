@@ -279,7 +279,7 @@ static void sendBLEData(void *pvParam)
  * */
 static void retrieveGPSData(void *pvParam)
 {
-    // bool isValid = false;
+    bool isValid = false;
 
     while (1)
     {
@@ -291,7 +291,7 @@ static void retrieveGPSData(void *pvParam)
             gps->encode(gpsChar);
         }
 
-        // isValid = gps->getValidation();
+        isValid = gps->getValidation();
 
         if ((gps->getCharProcessed()) < 10)
         {
@@ -300,24 +300,13 @@ static void retrieveGPSData(void *pvParam)
         }
         else
         {
-            if (gps->location.isUpdated())
+            if (isValid)
             {
-                float latitude = static_cast<float>(gps->location.lat());
-                float longitude = static_cast<float>(gps->location.lng());
-
-                Serial.printf("[GPS] Latitude : %f\n", latitude);
-                Serial.printf("[GPS] Longitude : %f\n", longitude);
-
-                data.gps.latitude = latitude;
-                data.gps.latitude = longitude;
-                data.gps.status = 'A';
+                Serial.println("GPS is valid");
             }
             else
             {
                 Serial.println("[GPS] GPS is searching for a signal...");
-                // data.gps.latitude = 0.00f;
-                // data.gps.latitude = 0.00f;
-                data.gps.status = 'V';
             }
         }
 
