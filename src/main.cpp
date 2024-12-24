@@ -50,6 +50,7 @@ BeaconData_t data;
 HardwareSerial modbus(1);
 Setting_t setting;
 float scaleAdjusted;
+uint16_t glitchCounter = 0;
 
 void setup()
 {
@@ -194,6 +195,7 @@ static void dataAcquisition(void *pvParam)
             Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID);
             Serial.printf("[setting] threshold HM\t\t: %d V\n", setting.thresholdHM);
             Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
+            Serial.printf("[Err. Counter] Glitch Counter\t: %d\n", glitchCounter);
             Serial.printf("============================================\n");
 
             xSemaphoreGive(dataReadySemaphore);
@@ -397,20 +399,36 @@ static void countingHourMeter(void *pvParam)
             currentTime = rtc->now();
             runTimeAccrued = static_cast<time_t>(currentTime.secondstime()) - static_cast<time_t>(startTime.secondstime());
 
-            data.hourMeter += runTimeAccrued;
+            // NOTE: UNCOMMENT TO DEBUG
+            /**
+            Serial.printf("============================================\n");
+            Serial.printf("[DEBUG] current - start = %d - %d = %d \n", currentTime.secondstime(), startTime.secondstime(), runTimeAccrued);
+            Serial.printf("============================================\n");
+            */
 
-            // Serial.printf("[HM] Hour Meter is updated\n");
-
-            if (hm->saveToStorage(data.hourMeter))
+            if (runTimeAccrued < 0)
             {
-                // Serial.println("[HM] total run hour is saved to storage");
+                Serial.printf("[ERROR] GLITCH IS FOUND! Counter : %d\n", glitchCounter);
+                glitchCounter += 1;
             }
             else
             {
-                // Serial.println("[HM] total run hour is failed to be saved");
-            }
 
-            startTime = currentTime; // Update start time for the next interval
+                data.hourMeter += runTimeAccrued;
+
+                // Serial.printf("[HM] Hour Meter is updated\n");
+
+                if (hm->saveToStorage(data.hourMeter))
+                {
+                    // Serial.println("[HM] total run hour is saved to storage");
+                }
+                else
+                {
+                    // Serial.println("[HM] total run hour is failed to be saved");
+                }
+
+                startTime = currentTime; // Update start time for the next interval
+            }
         }
         else
         {
@@ -418,7 +436,7 @@ static void countingHourMeter(void *pvParam)
             isCounting = false; // Reset counting state
         }
 
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(10000));
     }
 }
 
