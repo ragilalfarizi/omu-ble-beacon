@@ -379,8 +379,10 @@ static void serialConfig(void *pvParam)
 
 static void countingHourMeter(void *pvParam)
 {
-    DateTime startTime, currentTime;
-    time_t runTimeAccrued = 0;
+    DateTime startTime, currentTime, previousTime;
+    int8_t intervalRaw = 0;
+    time_t intervalTime = 0;
+    // time_t runTimeAccrued = 0;
     bool isCounting = false; // Tracks if counting has started
 
     while (1)
@@ -394,10 +396,24 @@ static void countingHourMeter(void *pvParam)
                 Serial.printf("[HM] Voltage above threshold. Counting started at %02d:%02d:%02d\n",
                               startTime.hour(), startTime.minute(), startTime.second());
                 isCounting = true;
+
+                previousTime = startTime;
             }
 
             currentTime = rtc->now();
-            runTimeAccrued = static_cast<time_t>(currentTime.secondstime()) - static_cast<time_t>(startTime.secondstime());
+            // runTimeAccrued = static_cast<time_t>(currentTime.secondstime()) - static_cast<time_t>(startTime.secondstime());
+
+            intervalRaw = (int8_t)(currentTime.secondstime() - previousTime.secondstime());
+            if (intervalRaw > 11 || intervalRaw < 0)
+            {
+                Serial.printf("[ERROR] GLITCH IS FOUND! Counter : %d\n", glitchCounter);
+                glitchCounter += 1;
+                intervalTime = 10;
+            }
+            else
+            {
+                intervalTime = (time_t)abs(intervalRaw);
+            }
 
             // NOTE: UNCOMMENT TO DEBUG
             /**
@@ -406,29 +422,22 @@ static void countingHourMeter(void *pvParam)
             Serial.printf("============================================\n");
             */
 
-            if (runTimeAccrued < 0)
+            data.hourMeter += intervalTime;
+
+            previousTime = currentTime;
+
+            // Serial.printf("[HM] Hour Meter is updated\n");
+
+            if (hm->saveToStorage(data.hourMeter))
             {
-                Serial.printf("[ERROR] GLITCH IS FOUND! Counter : %d\n", glitchCounter);
-                glitchCounter += 1;
+                // Serial.println("[HM] total run hour is saved to storage");
             }
             else
             {
-
-                data.hourMeter += runTimeAccrued;
-
-                // Serial.printf("[HM] Hour Meter is updated\n");
-
-                if (hm->saveToStorage(data.hourMeter))
-                {
-                    // Serial.println("[HM] total run hour is saved to storage");
-                }
-                else
-                {
-                    // Serial.println("[HM] total run hour is failed to be saved");
-                }
-
-                startTime = currentTime; // Update start time for the next interval
+                // Serial.println("[HM] total run hour is failed to be saved");
             }
+
+            startTime = currentTime; // Update start time for the next interval
         }
         else
         {
