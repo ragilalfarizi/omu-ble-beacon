@@ -267,7 +267,7 @@ static void sendBLEData(void *pvParam)
     {
         setCustomBeacon();
         pAdvertising->start();
-        Serial.println("[BLE] Advertising...");
+        // Serial.println("[BLE] Advertising...");
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
@@ -283,7 +283,7 @@ static void retrieveGPSData(void *pvParam)
 
     while (1)
     {
-        Serial.println("[GPS] encoding...");
+        // Serial.println("[GPS] encoding...");
 
         while (Serial.available() > 0)
         {
@@ -295,18 +295,18 @@ static void retrieveGPSData(void *pvParam)
 
         if ((gps->getCharProcessed()) < 10)
         {
-            Serial.println("[GPS] GPS module not sending data, check wiring or module power");
+            // Serial.println("[GPS] GPS module not sending data, check wiring or module power");
             data.gps.status = 'V';
         }
         else
         {
             if (isValid)
             {
-                Serial.println("GPS is valid");
+                // Serial.println("GPS is valid");
             }
             else
             {
-                Serial.println("[GPS] GPS is searching for a signal...");
+                // Serial.println("[GPS] GPS is searching for a signal...");
             }
         }
 
@@ -399,22 +399,22 @@ static void countingHourMeter(void *pvParam)
 
             data.hourMeter += runTimeAccrued;
 
-            Serial.printf("[HM] Hour Meter is updated\n");
+            // Serial.printf("[HM] Hour Meter is updated\n");
 
             if (hm->saveToStorage(data.hourMeter))
             {
-                Serial.println("[HM] total run hour is saved to storage");
+                // Serial.println("[HM] total run hour is saved to storage");
             }
             else
             {
-                Serial.println("[HM] total run hour is failed to be saved");
+                // Serial.println("[HM] total run hour is failed to be saved");
             }
 
             startTime = currentTime; // Update start time for the next interval
         }
         else
         {
-            Serial.println("[HM] Voltage below threshold, counting paused.");
+            // Serial.println("[HM] Voltage below threshold, counting paused.");
             isCounting = false; // Reset counting state
         }
 
@@ -489,11 +489,11 @@ static void checkDeepSleepTask(void *param)
         {
             if (data.voltageSupply > LOWEST_ANALOG_THRESHOLD)
             {
-                Serial.println("Adapter is plugged in. Keeping system running.");
+                // Serial.println("Adapter is plugged in. Keeping system running.");
             }
             else
             {
-                Serial.printf("Analog Input is less than %.2f V. Reading the battery voltage..\n", LOWEST_ANALOG_THRESHOLD);
+                // Serial.printf("Analog Input is less than %.2f V. Reading the battery voltage..\n", LOWEST_ANALOG_THRESHOLD);
 
                 // enable pin to read battery voltage
                 digitalWrite(PIN_EN_READ_BATT_VOLT, HIGH);
@@ -508,7 +508,7 @@ static void checkDeepSleepTask(void *param)
                 {
                     int16_t batteryADC = analogRead(PIN_READ_BATT_VOLT);
                     float batteryVoltage = calculateBatteryVoltage(batteryADC);
-                    Serial.printf("batteryVoltage : %.2f\n", batteryVoltage);
+                    // Serial.printf("batteryVoltage : %.2f\n", batteryVoltage);
 
                     batteryVoltageReadings.push_back(batteryVoltage);
 
@@ -519,13 +519,13 @@ static void checkDeepSleepTask(void *param)
 
                 // Calculate the average battery voltage
                 float sum = std::accumulate(batteryVoltageReadings.begin(), batteryVoltageReadings.end(), 0.0f);
-                Serial.printf("Sum of Batt Voltage : %f\n", sum);
+                // Serial.printf("Sum of Batt Voltage : %f\n", sum);
 
                 size_t vectorSize = batteryVoltageReadings.size();
-                Serial.printf("Size of Batt Voltage Vector : %d\n", vectorSize);
+                // Serial.printf("Size of Batt Voltage Vector : %d\n", vectorSize);
 
                 float averageVoltage = sum / vectorSize;
-                Serial.print("Average Voltage: ");
+                // Serial.print("Average Voltage: ");
                 Serial.println(averageVoltage);
 
                 // Check if average voltage is below the threshold
@@ -545,7 +545,7 @@ static void checkDeepSleepTask(void *param)
                 else
                 {
                     batteryVoltageReadings.clear();
-                    Serial.println("Battery voltage is sufficient. Continuing operation...");
+                    // Serial.println("Battery voltage is sufficient. Continuing operation...");
                 }
             }
 
