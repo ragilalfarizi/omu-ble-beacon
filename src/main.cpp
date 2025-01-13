@@ -50,6 +50,7 @@ BeaconData_t data;
 HardwareSerial modbus(1);
 Setting_t setting;
 float scaleAdjusted;
+uint16_t glitchCounter = 0;
 
 void setup()
 {
@@ -110,6 +111,9 @@ void setup()
     Serial.printf("[setting] threshold HM\t\t: %d\n", setting.thresholdHM);
     Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
     scaleAdjusted = setting.offsetAnalogInput;
+
+    /* ENABLING ESP32 DEEP SLEEP BY TIMER */
+    esp_sleep_enable_timer_wakeup(BLE_SLEEP_DURATION);
 
     // xTaskCreatePinnedToCore(RTCDemo, "RTC Demo", 2048, NULL, 3, &RTCDemoHandler, 1); // TODO: Depreciating
     // xTaskCreatePinnedToCore(sendToRS485, "send data to RS485", 2048, NULL, 3, &sendToRS485Handler, 0);
@@ -194,6 +198,7 @@ static void dataAcquisition(void *pvParam)
             Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID);
             Serial.printf("[setting] threshold HM\t\t: %d V\n", setting.thresholdHM);
             Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
+            Serial.printf("[Err. Counter] Glitch Counter\t: %d\n", glitchCounter);
             Serial.printf("============================================\n");
 
             xSemaphoreGive(dataReadySemaphore);
@@ -263,12 +268,60 @@ static void setCustomBeacon()
 
 static void sendBLEData(void *pvParam)
 {
+    std::vector<float> analogVoltageContainer;
+
+    uint32_t startTime;
+    int16_t voltageSum = 0;
+    uint8_t readingCount = 0;
+    static const time_t DURATION = 5000;
+    static const float THRESHOLD = 3.00;
+
     while (1)
     {
         setCustomBeacon();
-        pAdvertising->start();
-        Serial.println("[BLE] Advertising...");
-        vTaskDelay(pdMS_TO_TICKS(1000));
+
+        if (data.voltageSupply > THRESHOLD)
+        {
+            Serial.printf("[DEBUG] Beacon is running normally (1s)\n");
+            pAdvertising->start();
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+        else
+        {
+            // Check if the voltage is stalled for 5 seconds
+            startTime = millis();
+
+            while (millis() - startTime < DURATION)
+            {
+                float reading = ain->readAnalogInput(AnalogPin::PIN_A0);
+
+                analogVoltageContainer.push_back(reading);
+                delay(500);
+            }
+
+            // Calculate the average
+            float sum = std::accumulate(analogVoltageContainer.begin(), analogVoltageContainer.end(), 0.0f);
+            size_t size = analogVoltageContainer.size();
+            float averageVoltage = sum / size;
+
+            Serial.printf("[DEBUG] average voltage monitored : %.2f\n", averageVoltage);
+
+            if (averageVoltage < THRESHOLD)
+            {
+                Serial.printf("[DEBUG] Beacon is running on battery saving mode (10s)\n");
+                pAdvertising->start(10); // beacon for 10 second
+                esp_deep_sleep_start();
+            }
+
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+
+        // if (no tegangan input)
+        // send beacon 10 seconds then sleep
+        // (wake up by counter)
+        // else
+        //
+        // Serial.println("[BLE] Advertising...");
     }
 }
 
@@ -283,7 +336,7 @@ static void retrieveGPSData(void *pvParam)
 
     while (1)
     {
-        Serial.println("[GPS] encoding...");
+        // Serial.println("[GPS] encoding...");
 
         while (Serial.available() > 0)
         {
@@ -295,18 +348,18 @@ static void retrieveGPSData(void *pvParam)
 
         if ((gps->getCharProcessed()) < 10)
         {
-            Serial.println("[GPS] GPS module not sending data, check wiring or module power");
+            // Serial.println("[GPS] GPS module not sending data, check wiring or module power");
             data.gps.status = 'V';
         }
         else
         {
             if (isValid)
             {
-                Serial.println("GPS is valid");
+                // Serial.println("GPS is valid");
             }
             else
             {
-                Serial.println("[GPS] GPS is searching for a signal...");
+                // Serial.println("[GPS] GPS is searching for a signal...");
             }
         }
 
@@ -377,8 +430,10 @@ static void serialConfig(void *pvParam)
 
 static void countingHourMeter(void *pvParam)
 {
-    DateTime startTime, currentTime;
-    time_t runTimeAccrued = 0;
+    DateTime startTime, currentTime, previousTime;
+    int8_t intervalRaw = 0;
+    time_t intervalTime = 0;
+    // time_t runTimeAccrued = 0;
     bool isCounting = false; // Tracks if counting has started
 
     while (1)
@@ -392,33 +447,56 @@ static void countingHourMeter(void *pvParam)
                 Serial.printf("[HM] Voltage above threshold. Counting started at %02d:%02d:%02d\n",
                               startTime.hour(), startTime.minute(), startTime.second());
                 isCounting = true;
+
+                previousTime = startTime;
             }
 
             currentTime = rtc->now();
-            runTimeAccrued = static_cast<time_t>(currentTime.secondstime()) - static_cast<time_t>(startTime.secondstime());
+            // runTimeAccrued = static_cast<time_t>(currentTime.secondstime()) - static_cast<time_t>(startTime.secondstime());
 
-            data.hourMeter += runTimeAccrued;
-
-            Serial.printf("[HM] Hour Meter is updated\n");
-
-            if (hm->saveToStorage(data.hourMeter))
+            intervalRaw = (int8_t)(currentTime.secondstime() - previousTime.secondstime());
+            if (intervalRaw > 11 || intervalRaw < 0)
             {
-                Serial.println("[HM] total run hour is saved to storage");
+                Serial.printf("[ERROR] GLITCH IS FOUND! Counter : %d\n", glitchCounter);
+                glitchCounter += 1;
+                intervalTime = 10;
             }
             else
             {
-                Serial.println("[HM] total run hour is failed to be saved");
+                intervalTime = (time_t)abs(intervalRaw);
+            }
+
+            // NOTE: UNCOMMENT TO DEBUG
+            /**
+            Serial.printf("============================================\n");
+            Serial.printf("[DEBUG] current - start = %d - %d = %d \n", currentTime.secondstime(), startTime.secondstime(), runTimeAccrued);
+            Serial.printf("============================================\n");
+            */
+
+            data.hourMeter += intervalTime;
+
+            previousTime = currentTime;
+
+            // Serial.printf("[HM] Hour Meter is updated\n");
+
+            if (hm->saveToStorage(data.hourMeter))
+            {
+                // Serial.println("[HM] total run hour is saved to storage");
+            }
+            else
+            {
+                // Serial.println("[HM] total run hour is failed to be saved");
             }
 
             startTime = currentTime; // Update start time for the next interval
         }
         else
         {
-            Serial.println("[HM] Voltage below threshold, counting paused.");
+            // Serial.println("[HM] Voltage below threshold, counting paused.");
             isCounting = false; // Reset counting state
         }
 
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(10000));
     }
 }
 
@@ -489,11 +567,11 @@ static void checkDeepSleepTask(void *param)
         {
             if (data.voltageSupply > LOWEST_ANALOG_THRESHOLD)
             {
-                Serial.println("Adapter is plugged in. Keeping system running.");
+                // Serial.println("Adapter is plugged in. Keeping system running.");
             }
             else
             {
-                Serial.printf("Analog Input is less than %.2f V. Reading the battery voltage..\n", LOWEST_ANALOG_THRESHOLD);
+                // Serial.printf("Analog Input is less than %.2f V. Reading the battery voltage..\n", LOWEST_ANALOG_THRESHOLD);
 
                 // enable pin to read battery voltage
                 digitalWrite(PIN_EN_READ_BATT_VOLT, HIGH);
@@ -508,7 +586,7 @@ static void checkDeepSleepTask(void *param)
                 {
                     int16_t batteryADC = analogRead(PIN_READ_BATT_VOLT);
                     float batteryVoltage = calculateBatteryVoltage(batteryADC);
-                    Serial.printf("batteryVoltage : %.2f\n", batteryVoltage);
+                    // Serial.printf("batteryVoltage : %.2f\n", batteryVoltage);
 
                     batteryVoltageReadings.push_back(batteryVoltage);
 
@@ -519,13 +597,13 @@ static void checkDeepSleepTask(void *param)
 
                 // Calculate the average battery voltage
                 float sum = std::accumulate(batteryVoltageReadings.begin(), batteryVoltageReadings.end(), 0.0f);
-                Serial.printf("Sum of Batt Voltage : %f\n", sum);
+                // Serial.printf("Sum of Batt Voltage : %f\n", sum);
 
                 size_t vectorSize = batteryVoltageReadings.size();
-                Serial.printf("Size of Batt Voltage Vector : %d\n", vectorSize);
+                // Serial.printf("Size of Batt Voltage Vector : %d\n", vectorSize);
 
                 float averageVoltage = sum / vectorSize;
-                Serial.print("Average Voltage: ");
+                // Serial.print("Average Voltage: ");
                 Serial.println(averageVoltage);
 
                 // Check if average voltage is below the threshold
@@ -545,7 +623,7 @@ static void checkDeepSleepTask(void *param)
                 else
                 {
                     batteryVoltageReadings.clear();
-                    Serial.println("Battery voltage is sufficient. Continuing operation...");
+                    // Serial.println("Battery voltage is sufficient. Continuing operation...");
                 }
             }
 
