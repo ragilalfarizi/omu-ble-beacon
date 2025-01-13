@@ -5,7 +5,8 @@
 #define PIN_RX_RS485 18
 #define PIN_TX_RS485 19
 
-#define STALL_TOLERANCE_MS 5000 // 5 seconds tolerance
+#define STALL_TOLERANCE_MS 5000                // 5 seconds tolerance
+#define BLE_SLEEP_DURATION 15 * 60 * 1000ULL // Sleep for 2 minutes in microseconds
 
 struct GPSData_t
 {
