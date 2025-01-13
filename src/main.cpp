@@ -304,7 +304,7 @@ static void sendBLEData(void *pvParam)
             size_t size = analogVoltageContainer.size();
             float averageVoltage = sum / size;
 
-            Serial.printf("[DEBUG] average voltage monitored : %d\n", averageVoltage);
+            Serial.printf("[DEBUG] average voltage monitored : %.2f\n", averageVoltage);
 
             if (averageVoltage < THRESHOLD)
             {
