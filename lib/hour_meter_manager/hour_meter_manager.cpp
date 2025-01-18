@@ -115,8 +115,8 @@ Setting_t HourMeter::loadSetting()
         }
 
         // Extract values from JSON if successfully parsed
-        setting.ID = doc["ID"].as<String>();
-        setting.thresholdHM = doc["thresholdHM"].as<uint8_t>();
+        setting.ID                = doc["ID"].as<String>();
+        setting.thresholdHM       = doc["thresholdHM"].as<float>();
         setting.offsetAnalogInput = doc["offsetAnalogInput"].as<float>();
 
         Serial.println("Successfully read settings from settings.json");
@@ -136,8 +136,8 @@ void HourMeter::saveSettings(const Setting_t &setting)
     JsonDocument doc;
 
     // Populate the JSON document with the Setting_t data
-    doc["ID"] = setting.ID;
-    doc["thresholdHM"] = setting.thresholdHM;
+    doc["ID"]                = setting.ID;
+    doc["thresholdHM"]       = setting.thresholdHM;
     doc["offsetAnalogInput"] = setting.offsetAnalogInput;
 
     // Open settings.json file for writing
