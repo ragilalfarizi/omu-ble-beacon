@@ -5,28 +5,28 @@
 #define PIN_RX_RS485 18
 #define PIN_TX_RS485 19
 
-#define STALL_TOLERANCE_MS 5000                // 5 seconds tolerance
-#define BLE_SLEEP_DURATION 15 * 60 * 1000ULL // Sleep for 2 minutes in microseconds
+#define STALL_TOLERANCE_MS 5000              // 5 seconds tolerance
+#define BLE_SLEEP_DURATION 15 * 60 * 1000ULL // Sleep for 15 minutes in microseconds
 
 struct GPSData_t
 {
     float longitude;
     float latitude;
-    char status;
+    char  status;
 };
 
 struct BeaconData_t
 {
     GPSData_t gps;
-    float voltageSupply;
-    time_t hourMeter;
+    float     voltageSupply;
+    time_t    hourMeter;
 };
 
 struct Setting_t
 {
     String ID;
-    uint8_t thresholdHM;
-    float offsetAnalogInput;
+    float  thresholdHM;
+    float  offsetAnalogInput;
 };
 
 enum ListID_t

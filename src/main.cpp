@@ -113,7 +113,7 @@ void setup()
     /* LOAD SETTING */
     setting = hm->loadSetting();
     Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID);
-    Serial.printf("[setting] threshold HM\t\t: %d\n", setting.thresholdHM);
+    Serial.printf("[setting] threshold HM\t\t: %.2f\n", setting.thresholdHM);
     Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
     scaleAdjusted = setting.offsetAnalogInput;
 
@@ -203,7 +203,7 @@ static void dataAcquisition(void *pvParam)
             Serial.printf("Hour Meter\t\t= %ld s\n", data.hourMeter);
             Serial.printf("============================================\n");
             Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID);
-            Serial.printf("[setting] threshold HM\t\t: %d V\n", setting.thresholdHM);
+            Serial.printf("[setting] threshold HM\t\t: %.2f V\n", setting.thresholdHM);
             Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
             Serial.printf("[Err. Counter] Glitch Counter\t: %d\n", glitchCounter);
             Serial.printf("============================================\n");
@@ -395,7 +395,6 @@ static void sendToRS485(void *pvParam)
 static void serialConfig(void *pvParam)
 {
     // NOTE: TURN OFF GPS SWITCH
-    // NOTE: TURN OFF GPS SWITCH
     TickType_t startTime = xTaskGetTickCount();      // Record the start time
     TickType_t duration  = pdMS_TO_TICKS(60000 / 4); // 15 seconds
 
@@ -535,7 +534,7 @@ static bool updateConfigFromUART(Setting_t &setting, const String &input)
         if (secondComma > firstComma + 1)
         {
             String thresholdPart = tail.substring(firstComma + 1, secondComma);
-            setting.thresholdHM  = thresholdPart.toInt(); // Extract threshold value
+            setting.thresholdHM  = thresholdPart.toFloat(); // Extract threshold value
         }
 
         if (thirdComma > secondComma + 1)
