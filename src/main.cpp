@@ -1,24 +1,28 @@
-#include "analog_input.h"
-#include "rtc.h"
 #include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
 #include <freertos/semphr.h>
-#include "NimBLEDevice.h"
-#include "NimBLEBeacon.h"
+#include <freertos/task.h>
+
+#include <numeric>
+
 #include "NimBLEAdvertising.h"
+#include "NimBLEBeacon.h"
+#include "NimBLEDevice.h"
 #include "NimBLEEddystoneURL.h"
+#include "analog_input.h"
+#include "check_sleep.h"
 #include "common.h"
 #include "gps.h"
 #include "hour_meter_manager.h"
 #include "id_management.h"
-#include "check_sleep.h"
-#include <numeric>
+#include "rtc.h"
+
+#define FIRMWARE_VERSION "v1.3.1"
 
 /* DEKLARASI OBJEK YANG DIGUNAKAN TERSIMPAN DI HEAP */
-RTC *rtc;
+RTC         *rtc;
 AnalogInput *ain;
-GPS *gps;
-HourMeter *hm;
+GPS         *gps;
+HourMeter   *hm;
 
 /* FORWARD DECLARATION UNTUK FUNGSI-FUNGSI DI DEPAN*/
 static void RTCDemo(void *pvParam);
@@ -33,24 +37,24 @@ static void setCustomBeacon();
 static bool updateConfigFromUART(Setting_t &setting, const String &input);
 
 /* FORWARD DECLARATION UNTUK HANDLER DAN SEMAPHORE RTOS */
-TaskHandle_t dataAcquisitionHandler = NULL;
-TaskHandle_t sendBLEDataHandler = NULL;
-TaskHandle_t retrieveGPSHandler = NULL;
-TaskHandle_t sendToRS485Handler = NULL;
-TaskHandle_t countingHMHandler = NULL;
-TaskHandle_t settingUARTHandler = NULL;
-TaskHandle_t checkSleepHandler = NULL;
-SemaphoreHandle_t xSemaphore = NULL;
-SemaphoreHandle_t dataReadySemaphore = NULL;
+TaskHandle_t      dataAcquisitionHandler = NULL;
+TaskHandle_t      sendBLEDataHandler     = NULL;
+TaskHandle_t      retrieveGPSHandler     = NULL;
+TaskHandle_t      sendToRS485Handler     = NULL;
+TaskHandle_t      countingHMHandler      = NULL;
+TaskHandle_t      settingUARTHandler     = NULL;
+TaskHandle_t      checkSleepHandler      = NULL;
+SemaphoreHandle_t xSemaphore             = NULL;
+SemaphoreHandle_t dataReadySemaphore     = NULL;
 // TaskHandle_t RTCDemoHandler = NULL;
 
 /* GLOBAL VARIABLES */
 BLEAdvertising *pAdvertising;
-BeaconData_t data;
-HardwareSerial modbus(1);
-Setting_t setting;
-float scaleAdjusted;
-uint16_t glitchCounter = 0;
+BeaconData_t    data;
+HardwareSerial  modbus(1);
+Setting_t       setting;
+float           scaleAdjusted;
+uint16_t        glitchCounter = 0;
 
 void setup()
 {
@@ -68,22 +72,23 @@ void setup()
     rtc = new RTC();
     if (rtc == nullptr)
     {
-        Serial.println("[ERROR] Failed to allocate memory for RTC object, retrying in 5 seconds...");
+        Serial.println("[ERROR] Failed to allocate memory for RTC object, retrying in 5 "
+                       "seconds...");
         vTaskDelay(pdMS_TO_TICKS(5000)); // Wait for 5 seconds before retrying
     }
 
     /* ANALOG INPUT INIT */
     Serial.println("[AIN] Inisialisasi Analog Input");
-    ain = new AnalogInput();
+    ain                = new AnalogInput();
     data.voltageSupply = ain->readAnalogInput(AnalogPin::PIN_A0); // untuk membaca di pin_a0 (PIN 1 pada silkscreen)
     Serial.printf("DATA VOLTAGE SUPPLY DARI SETUP : %f\n", data.voltageSupply);
 
     /* GPS INIT */
     Serial.println("[GPS] Inisialisasi GPS");
-    gps = new GPS();
-    data.gps.latitude = 0;
+    gps                = new GPS();
+    data.gps.latitude  = 0;
     data.gps.longitude = 0;
-    data.gps.status = 'V';
+    data.gps.status    = 'V';
 
     /* RS485 INIT */
     Serial.println("[485] Inisialisasi RS485");
@@ -100,7 +105,7 @@ void setup()
     pAdvertising = BLEDevice::getAdvertising();
 
     /* HOUR METER INIT */
-    hm = new HourMeter();
+    hm             = new HourMeter();
     data.hourMeter = hm->loadHMFromStorage();
     Serial.printf("[HM] Hour Meter yang tersimpan adalah %ld\n", data.hourMeter);
     // TODO: Print juga hour meter dalam jam
@@ -115,8 +120,10 @@ void setup()
     /* ENABLING ESP32 DEEP SLEEP BY TIMER */
     esp_sleep_enable_timer_wakeup(BLE_SLEEP_DURATION);
 
-    // xTaskCreatePinnedToCore(RTCDemo, "RTC Demo", 2048, NULL, 3, &RTCDemoHandler, 1); // TODO: Depreciating
-    // xTaskCreatePinnedToCore(sendToRS485, "send data to RS485", 2048, NULL, 3, &sendToRS485Handler, 0);
+    // xTaskCreatePinnedToCore(RTCDemo, "RTC Demo", 2048, NULL, 3,
+    // &RTCDemoHandler, 1); // TODO: Depreciating
+    // xTaskCreatePinnedToCore(sendToRS485, "send data to RS485", 2048, NULL, 3,
+    // &sendToRS485Handler, 0);
     xTaskCreatePinnedToCore(dataAcquisition, "Data Acquisition", 4096, NULL, 3, &dataAcquisitionHandler, 1);
     xTaskCreatePinnedToCore(sendBLEData, "Send BLE Data", 2048, NULL, 3, &sendBLEDataHandler, 0);
     xTaskCreatePinnedToCore(retrieveGPSData, "get GPS Data", 4096, NULL, 4, &retrieveGPSHandler, 1);
@@ -149,8 +156,8 @@ static void RTCDemo(void *pvParam)
 static void dataAcquisition(void *pvParam)
 {
     float previousLatitude = 0.0, previousLongitude = 0.0;
-    int stallCounter = 0; // Time spent stalled in milliseconds
-    bool latitudeStalled = false, longitudeStalled = false;
+    int   stallCounter    = 0; // Time spent stalled in milliseconds
+    bool  latitudeStalled = false, longitudeStalled = false;
 
     while (1)
     {
@@ -158,11 +165,11 @@ static void dataAcquisition(void *pvParam)
         {
             data.voltageSupply = ain->readAnalogInput(AnalogPin::PIN_A0);
 
-            float currentLatitude = gps->getlatitude();
+            float currentLatitude  = gps->getlatitude();
             float currentLongitude = gps->getLongitude();
 
             // Check for changes
-            latitudeStalled = fabs(currentLatitude - previousLatitude) < 0.00000001; // Adjust threshold if needed
+            latitudeStalled  = fabs(currentLatitude - previousLatitude) < 0.00000001; // Adjust threshold if needed
             longitudeStalled = fabs(currentLongitude - previousLongitude) < 0.00000001;
 
             if (latitudeStalled && longitudeStalled)
@@ -175,16 +182,16 @@ static void dataAcquisition(void *pvParam)
             }
             else
             {
-                stallCounter = 0;      // Reset counter if data changes
+                stallCounter    = 0;   // Reset counter if data changes
                 data.gps.status = 'A'; // Mark as active
             }
 
             // Store current values for next comparison
-            previousLatitude = currentLatitude;
+            previousLatitude  = currentLatitude;
             previousLongitude = currentLongitude;
 
             // Save data
-            data.gps.latitude = currentLatitude;
+            data.gps.latitude  = currentLatitude;
             data.gps.longitude = currentLongitude;
 
             // Print output
@@ -211,7 +218,7 @@ static void setCustomBeacon()
 {
     // atur data advertising
     BLEAdvertisementData oAdvertisementData = BLEAdvertisementData();
-    BLEAdvertisementData oScanResponseData = BLEAdvertisementData();
+    BLEAdvertisementData oScanResponseData  = BLEAdvertisementData();
 
     const uint16_t beaconUUID = 0xFEAA;
     oScanResponseData.setFlags(0x06); // GENERAL_DISC_MODE 0x02 | BR_EDR_NOT_SUPPORTED 0x04
@@ -222,8 +229,8 @@ static void setCustomBeacon()
     // float current = 1.5;             // dalam ampere
     // uint32_t timestamp = 1678801234; // contoh Unix TimeStamp
 
-    // Convert current to a 16-bit fixed-point format (e.g., 1.5 A -> 384 in 8.8 format)
-    // Konversi arus ke format (contoh: 1.5 A -> 384 di format 8.8)
+    // Convert current to a 16-bit fixed-point format (e.g., 1.5 A -> 384 in 8.8
+    // format) Konversi arus ke format (contoh: 1.5 A -> 384 di format 8.8)
     // int16_t currentFixedPoint = (int16_t)(current * 256);
     // int16_t analogInputFixedPoint = (int16_t)(analogInputVal * 256);
 
@@ -236,29 +243,29 @@ static void setCustomBeacon()
 
     extractBeaconID(std::string(setting.ID.c_str()), id, number);
 
-    uint16_t volt = data.voltageSupply * 1000; // 3300mV = 3.3V
-    int32_t latitudeFixedPoint = (int32_t)(data.gps.latitude * 256);
-    int32_t longitudeFixedPoint = (int32_t)(data.gps.longitude * 256);
+    uint16_t volt                = data.voltageSupply * 1000; // 3300mV = 3.3V
+    int32_t  latitudeFixedPoint  = (int32_t)(data.gps.latitude * 256);
+    int32_t  longitudeFixedPoint = (int32_t)(data.gps.longitude * 256);
 
-    beacon_data[0] = static_cast<uint8_t>(id);                   // List ID
-    beacon_data[1] = ((number & 0xFF00) >> 8);                   // Upper ID Digit
-    beacon_data[2] = (number & 0xFF);                            // Lower ID Digit
-    beacon_data[3] = ((volt & 0xFF00) >> 8);                     // Battery voltage, 1 mV/bit i.e. 0xCE4 = 3300mV = 3.3V
-    beacon_data[4] = (volt & 0xFF);                              //
-    beacon_data[5] = 0;                                          // Eddystone Frame Type (Unencrypted Eddystone-TLM)
-    beacon_data[6] = data.gps.status;                            //
-    beacon_data[7] = ((longitudeFixedPoint & 0xFF000000) >> 24); //
-    beacon_data[8] = ((longitudeFixedPoint & 0xFF0000) >> 16);   //
-    beacon_data[9] = ((longitudeFixedPoint & 0xFF00) >> 8);      //
-    beacon_data[10] = (longitudeFixedPoint & 0xFF);              //
-    beacon_data[11] = ((latitudeFixedPoint & 0xFF000000) >> 24); //
-    beacon_data[12] = ((latitudeFixedPoint & 0xFF0000) >> 16);   //
-    beacon_data[13] = ((latitudeFixedPoint & 0xFF00) >> 8);      //
-    beacon_data[14] = (latitudeFixedPoint & 0xFF);               //
-    beacon_data[15] = ((data.hourMeter & 0xFF000000) >> 24);     //
-    beacon_data[16] = ((data.hourMeter & 0xFF0000) >> 16);       //
-    beacon_data[17] = ((data.hourMeter & 0xFF00) >> 8);          //
-    beacon_data[18] = (data.hourMeter & 0xFF);                   //
+    beacon_data[0]  = static_cast<uint8_t>(id); // List ID
+    beacon_data[1]  = ((number & 0xFF00) >> 8); // Upper ID Digit
+    beacon_data[2]  = (number & 0xFF);          // Lower ID Digit
+    beacon_data[3]  = ((volt & 0xFF00) >> 8);   // Battery voltage, 1 mV/bit i.e. 0xCE4 = 3300mV = 3.3V
+    beacon_data[4]  = (volt & 0xFF);            //
+    beacon_data[5]  = 0;                        // Eddystone Frame Type (Unencrypted Eddystone-TLM)
+    beacon_data[6]  = data.gps.status;          //
+    beacon_data[7]  = ((longitudeFixedPoint & 0xFF000000) >> 24); //
+    beacon_data[8]  = ((longitudeFixedPoint & 0xFF0000) >> 16);   //
+    beacon_data[9]  = ((longitudeFixedPoint & 0xFF00) >> 8);      //
+    beacon_data[10] = (longitudeFixedPoint & 0xFF);               //
+    beacon_data[11] = ((latitudeFixedPoint & 0xFF000000) >> 24);  //
+    beacon_data[12] = ((latitudeFixedPoint & 0xFF0000) >> 16);    //
+    beacon_data[13] = ((latitudeFixedPoint & 0xFF00) >> 8);       //
+    beacon_data[14] = (latitudeFixedPoint & 0xFF);                //
+    beacon_data[15] = ((data.hourMeter & 0xFF000000) >> 24);      //
+    beacon_data[16] = ((data.hourMeter & 0xFF0000) >> 16);        //
+    beacon_data[17] = ((data.hourMeter & 0xFF00) >> 8);           //
+    beacon_data[18] = (data.hourMeter & 0xFF);                    //
 
     oScanResponseData.setServiceData(BLEUUID(beaconUUID), std::string(beacon_data, sizeof(beacon_data)));
     oAdvertisementData.setName("UMO BEACON");
@@ -270,11 +277,11 @@ static void sendBLEData(void *pvParam)
 {
     std::vector<float> analogVoltageContainer;
 
-    uint32_t startTime;
-    int16_t voltageSum = 0;
-    uint8_t readingCount = 0;
-    static const time_t DURATION = 5000;
-    static const float THRESHOLD = 3.00;
+    uint32_t            startTime;
+    int16_t             voltageSum   = 0;
+    uint8_t             readingCount = 0;
+    static const time_t DURATION     = 5000;
+    static const float  THRESHOLD    = 3.00;
 
     while (1)
     {
@@ -300,9 +307,9 @@ static void sendBLEData(void *pvParam)
             }
 
             // Calculate the average
-            float sum = std::accumulate(analogVoltageContainer.begin(), analogVoltageContainer.end(), 0.0f);
-            size_t size = analogVoltageContainer.size();
-            float averageVoltage = sum / size;
+            float  sum            = std::accumulate(analogVoltageContainer.begin(), analogVoltageContainer.end(), 0.0f);
+            size_t size           = analogVoltageContainer.size();
+            float  averageVoltage = sum / size;
 
             Serial.printf("[DEBUG] average voltage monitored : %.2f\n", averageVoltage);
 
@@ -348,7 +355,8 @@ static void retrieveGPSData(void *pvParam)
 
         if ((gps->getCharProcessed()) < 10)
         {
-            // Serial.println("[GPS] GPS module not sending data, check wiring or module power");
+            // Serial.println("[GPS] GPS module not sending data, check wiring or
+            // module power");
             data.gps.status = 'V';
         }
         else
@@ -369,7 +377,6 @@ static void retrieveGPSData(void *pvParam)
 
 static void sendToRS485(void *pvParam)
 {
-
     while (1)
     {
         modbus.printf("%c,%f,%f,%.2f", data.gps.status, data.gps.latitude, data.gps.longitude, data.voltageSupply);
@@ -389,8 +396,8 @@ static void serialConfig(void *pvParam)
 {
     // NOTE: TURN OFF GPS SWITCH
     // NOTE: TURN OFF GPS SWITCH
-    TickType_t startTime = xTaskGetTickCount();     // Record the start time
-    TickType_t duration = pdMS_TO_TICKS(60000 / 4); // 15 seconds
+    TickType_t startTime = xTaskGetTickCount();      // Record the start time
+    TickType_t duration  = pdMS_TO_TICKS(60000 / 4); // 15 seconds
 
     while (1)
     {
@@ -403,7 +410,6 @@ static void serialConfig(void *pvParam)
             {
                 if (updateConfigFromUART(setting, uartInput))
                 {
-
                     // save the config to littlefs
                     hm->saveSettings(setting);
                     hm->saveToStorage(data.hourMeter);
@@ -431,8 +437,8 @@ static void serialConfig(void *pvParam)
 static void countingHourMeter(void *pvParam)
 {
     DateTime startTime, currentTime, previousTime;
-    int8_t intervalRaw = 0;
-    time_t intervalTime = 0;
+    int8_t   intervalRaw  = 0;
+    time_t   intervalTime = 0;
     // time_t runTimeAccrued = 0;
     bool isCounting = false; // Tracks if counting has started
 
@@ -444,7 +450,8 @@ static void countingHourMeter(void *pvParam)
             {
                 // Initialize startTime when counting begins
                 startTime = rtc->now();
-                Serial.printf("[HM] Voltage above threshold. Counting started at %02d:%02d:%02d\n",
+                Serial.printf("[HM] Voltage above threshold. Counting started at "
+                              "%02d:%02d:%02d\n",
                               startTime.hour(), startTime.minute(), startTime.second());
                 isCounting = true;
 
@@ -452,7 +459,8 @@ static void countingHourMeter(void *pvParam)
             }
 
             currentTime = rtc->now();
-            // runTimeAccrued = static_cast<time_t>(currentTime.secondstime()) - static_cast<time_t>(startTime.secondstime());
+            // runTimeAccrued = static_cast<time_t>(currentTime.secondstime()) -
+            // static_cast<time_t>(startTime.secondstime());
 
             intervalRaw = (int8_t)(currentTime.secondstime() - previousTime.secondstime());
             if (intervalRaw > 11 || intervalRaw < 0)
@@ -469,7 +477,8 @@ static void countingHourMeter(void *pvParam)
             // NOTE: UNCOMMENT TO DEBUG
             /**
             Serial.printf("============================================\n");
-            Serial.printf("[DEBUG] current - start = %d - %d = %d \n", currentTime.secondstime(), startTime.secondstime(), runTimeAccrued);
+            Serial.printf("[DEBUG] current - start = %d - %d = %d \n",
+            currentTime.secondstime(), startTime.secondstime(), runTimeAccrued);
             Serial.printf("============================================\n");
             */
 
@@ -508,12 +517,13 @@ static bool updateConfigFromUART(Setting_t &setting, const String &input)
         // Remove "CONFIG" from the string
         String tail = input.substring(input.indexOf(',') + 1);
 
-        // Now, tail holds everything after "CONFIG", such as "CD0002,24,0.1,987,DONE"
+        // Now, tail holds everything after "CONFIG", such as
+        // "CD0002,24,0.1,987,DONE"
 
         // Find the positions of the commas
-        int firstComma = tail.indexOf(',');
+        int firstComma  = tail.indexOf(',');
         int secondComma = tail.indexOf(',', firstComma + 1);
-        int thirdComma = tail.indexOf(',', secondComma + 1);
+        int thirdComma  = tail.indexOf(',', secondComma + 1);
         int fourthComma = tail.indexOf(',', thirdComma + 1);
 
         // Parse each part of the string after "CONFIG"
@@ -525,20 +535,20 @@ static bool updateConfigFromUART(Setting_t &setting, const String &input)
         if (secondComma > firstComma + 1)
         {
             String thresholdPart = tail.substring(firstComma + 1, secondComma);
-            setting.thresholdHM = thresholdPart.toInt(); // Extract threshold value
+            setting.thresholdHM  = thresholdPart.toInt(); // Extract threshold value
         }
 
         if (thirdComma > secondComma + 1)
         {
-            String offsetPart = tail.substring(secondComma + 1, thirdComma);
+            String offsetPart         = tail.substring(secondComma + 1, thirdComma);
             setting.offsetAnalogInput = offsetPart.toFloat(); // Extract offset value
-            scaleAdjusted = setting.offsetAnalogInput;
+            scaleAdjusted             = setting.offsetAnalogInput;
         }
 
         if (fourthComma > thirdComma + 1)
         {
             String hourMeterPart = tail.substring(thirdComma + 1, fourthComma);
-            data.hourMeter = hourMeterPart.toInt(); // Extract hour meter value
+            data.hourMeter       = hourMeterPart.toInt(); // Extract hour meter value
         }
 
         // Extract the last part (Done)
@@ -571,21 +581,22 @@ static void checkDeepSleepTask(void *param)
             }
             else
             {
-                // Serial.printf("Analog Input is less than %.2f V. Reading the battery voltage..\n", LOWEST_ANALOG_THRESHOLD);
+                // Serial.printf("Analog Input is less than %.2f V. Reading the battery
+                // voltage..\n", LOWEST_ANALOG_THRESHOLD);
 
                 // enable pin to read battery voltage
                 digitalWrite(PIN_EN_READ_BATT_VOLT, HIGH);
                 vTaskDelay(pdMS_TO_TICKS(100));
 
                 // Monitor battery voltage for 15 seconds
-                unsigned long startTime = millis();
-                int voltageSum = 0;
-                int readingsCount = 0;
+                unsigned long startTime     = millis();
+                int           voltageSum    = 0;
+                int           readingsCount = 0;
 
                 while (millis() - startTime < MONITOR_DURATION)
                 {
-                    int16_t batteryADC = analogRead(PIN_READ_BATT_VOLT);
-                    float batteryVoltage = calculateBatteryVoltage(batteryADC);
+                    int16_t batteryADC     = analogRead(PIN_READ_BATT_VOLT);
+                    float   batteryVoltage = calculateBatteryVoltage(batteryADC);
                     // Serial.printf("batteryVoltage : %.2f\n", batteryVoltage);
 
                     batteryVoltageReadings.push_back(batteryVoltage);
@@ -613,7 +624,8 @@ static void checkDeepSleepTask(void *param)
 
                     // PIN CHG_STS will be low when the adaptor is plugged in again.
                     esp_sleep_enable_ext0_wakeup(GPIO_NUM_35, 0); // 1 = High, 0 = Low
-                    digitalWrite(PIN_EN_READ_BATT_VOLT, LOW);     // Recontrol pin before sleeping
+                    digitalWrite(PIN_EN_READ_BATT_VOLT,
+                                 LOW); // Recontrol pin before sleeping
                     batteryVoltageReadings.clear();
 
                     vTaskDelay(pdMS_TO_TICKS(100));
@@ -623,7 +635,8 @@ static void checkDeepSleepTask(void *param)
                 else
                 {
                     batteryVoltageReadings.clear();
-                    // Serial.println("Battery voltage is sufficient. Continuing operation...");
+                    // Serial.println("Battery voltage is sufficient. Continuing
+                    // operation...");
                 }
             }
 
