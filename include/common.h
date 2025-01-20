@@ -56,3 +56,9 @@ enum ListID_t
     XWT,
     UNKNOWN,
 };
+
+enum SystemState_t
+{
+    NORMAL = 0,
+    ON_BATTERY,
+};

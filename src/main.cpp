@@ -55,6 +55,7 @@ HardwareSerial  modbus(1);
 Setting_t       setting;
 float           scaleAdjusted;
 uint16_t        glitchCounter = 0;
+SystemState_t   currentState;
 
 void setup()
 {
@@ -280,7 +281,15 @@ static void sendBLEData(void *pvParam)
         setCustomBeacon();
 
         pAdvertising->start();
-        vTaskDelay(pdMS_TO_TICKS(1000));
+
+        if (currentState == NORMAL)
+        {
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+        else
+        {
+            vTaskDelay(pdMS_TO_TICKS(2000));
+        }
     }
 }
 
@@ -529,11 +538,13 @@ static void checkDeepSleepTask(void *param)
             if (data.voltageSupply > LOWEST_ANALOG_THRESHOLD)
             {
                 // Serial.println("Adapter is plugged in. Keeping system running.");
+                currentState = NORMAL;
             }
             else
             {
                 // Serial.printf("Analog Input is less than %.2f V. Reading the battery
                 // voltage..\n", LOWEST_ANALOG_THRESHOLD);
+                currentState = ON_BATTERY;
 
                 // enable pin to read battery voltage
                 digitalWrite(PIN_EN_READ_BATT_VOLT, HIGH);
