@@ -275,60 +275,12 @@ static void setCustomBeacon()
 
 static void sendBLEData(void *pvParam)
 {
-    std::vector<float> analogVoltageContainer;
-
-    uint32_t            startTime;
-    int16_t             voltageSum   = 0;
-    uint8_t             readingCount = 0;
-    static const time_t DURATION     = 5000;
-    static const float  THRESHOLD    = 3.00;
-
     while (1)
     {
         setCustomBeacon();
 
-        if (data.voltageSupply > THRESHOLD)
-        {
-            Serial.printf("[DEBUG] Beacon is running normally (1s)\n");
-            pAdvertising->start();
-            vTaskDelay(pdMS_TO_TICKS(1000));
-        }
-        else
-        {
-            // Check if the voltage is stalled for 5 seconds
-            startTime = millis();
-
-            while (millis() - startTime < DURATION)
-            {
-                float reading = ain->readAnalogInput(AnalogPin::PIN_A0);
-
-                analogVoltageContainer.push_back(reading);
-                delay(500);
-            }
-
-            // Calculate the average
-            float  sum            = std::accumulate(analogVoltageContainer.begin(), analogVoltageContainer.end(), 0.0f);
-            size_t size           = analogVoltageContainer.size();
-            float  averageVoltage = sum / size;
-
-            Serial.printf("[DEBUG] average voltage monitored : %.2f\n", averageVoltage);
-
-            if (averageVoltage < THRESHOLD)
-            {
-                Serial.printf("[DEBUG] Beacon is running on battery saving mode (10s)\n");
-                pAdvertising->start(10); // beacon for 10 second
-                esp_deep_sleep_start();
-            }
-
-            vTaskDelay(pdMS_TO_TICKS(1000));
-        }
-
-        // if (no tegangan input)
-        // send beacon 10 seconds then sleep
-        // (wake up by counter)
-        // else
-        //
-        // Serial.println("[BLE] Advertising...");
+        pAdvertising->start();
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
