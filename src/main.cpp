@@ -121,10 +121,6 @@ void setup()
     /* ENABLING ESP32 DEEP SLEEP BY TIMER */
     esp_sleep_enable_ext0_wakeup(GPIO_NUM_35, 0); // 1 = High, 0 = Low
 
-    // xTaskCreatePinnedToCore(RTCDemo, "RTC Demo", 2048, NULL, 3,
-    // &RTCDemoHandler, 1); // TODO: Depreciating
-    // xTaskCreatePinnedToCore(sendToRS485, "send data to RS485", 2048, NULL, 3,
-    // &sendToRS485Handler, 0);
     xTaskCreatePinnedToCore(dataAcquisition, "Data Acquisition", 4096, NULL, 3, &dataAcquisitionHandler, 1);
     xTaskCreatePinnedToCore(sendBLEData, "Send BLE Data", 2048, NULL, 3, &sendBLEDataHandler, 0);
     xTaskCreatePinnedToCore(retrieveGPSData, "get GPS Data", 4096, NULL, 4, &retrieveGPSHandler, 1);
@@ -135,23 +131,6 @@ void setup()
 
 void loop()
 {
-}
-
-static void RTCDemo(void *pvParam)
-{
-    while (1)
-    {
-        if (xSemaphoreTake(xSemaphore, portMAX_DELAY))
-        {
-            Serial.println();
-            Serial.printf("============================================\n");
-            rtc->printRTCData();
-            Serial.printf("============================================\n");
-
-            xSemaphoreGive(xSemaphore);
-            vTaskDelay(pdMS_TO_TICKS(100));
-        }
-    }
 }
 
 static void dataAcquisition(void *pvParam)
