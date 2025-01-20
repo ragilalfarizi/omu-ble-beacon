@@ -118,7 +118,7 @@ void setup()
     scaleAdjusted = setting.offsetAnalogInput;
 
     /* ENABLING ESP32 DEEP SLEEP BY TIMER */
-    esp_sleep_enable_timer_wakeup(BLE_SLEEP_DURATION);
+    esp_sleep_enable_ext0_wakeup(GPIO_NUM_35, 0); // 1 = High, 0 = Low
 
     // xTaskCreatePinnedToCore(RTCDemo, "RTC Demo", 2048, NULL, 3,
     // &RTCDemoHandler, 1); // TODO: Depreciating
@@ -581,6 +581,7 @@ static void checkDeepSleepTask(void *param)
 
                     vTaskDelay(pdMS_TO_TICKS(100));
 
+                    Serial.flush();
                     esp_deep_sleep_start();
                 }
                 else
