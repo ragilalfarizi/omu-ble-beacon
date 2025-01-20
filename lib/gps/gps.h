@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include <TinyGPSPlus.h>
 
-class GPS
+class GPS : public TinyGPSPlus
 {
 public:
     GPS();

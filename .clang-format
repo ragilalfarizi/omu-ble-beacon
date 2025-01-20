@@ -1,0 +1,7 @@
+﻿---
+BasedOnStyle: Microsoft
+AlignConsecutiveMacros: 'true'
+AlignConsecutiveAssignments: 'true'
+AlignConsecutiveDeclarations: 'true'
+
+...
