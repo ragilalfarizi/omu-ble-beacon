@@ -25,7 +25,6 @@ GPS         *gps;
 HourMeter   *hm;
 
 /* FORWARD DECLARATION UNTUK FUNGSI-FUNGSI DI DEPAN*/
-static void RTCDemo(void *pvParam);
 static void dataAcquisition(void *pvParam);
 static void sendBLEData(void *pvParam);
 static void retrieveGPSData(void *pvParam);
@@ -56,12 +55,16 @@ Setting_t       setting;
 float           scaleAdjusted;
 uint16_t        glitchCounter = 0;
 SystemState_t   currentState;
+static void     printFirmwareVersion();
 
 void setup()
 {
     /* SERIAL INIT */
     Serial.begin(9600);
     Serial.println("[Serial] Mesin dinyalakan");
+
+    /* PRINT FIRMWARE VERSION */
+    printFirmwareVersion();
 
     /* DEEP SLEEP INIT */
     printWakeupReason();
@@ -587,4 +590,15 @@ static void checkDeepSleepTask(void *param)
             vTaskDelay(pdMS_TO_TICKS(500));
         }
     }
+}
+
+static void printFirmwareVersion()
+{
+    Serial.printf("\n");
+    Serial.printf("########################################\n");
+    Serial.printf("##                                    ##\n");
+    Serial.printf("##  FIRMWARE VERSION: %-10s  ##\n", FIRMWARE_VERSION);
+    Serial.printf("##                                    ##\n");
+    Serial.printf("########################################\n");
+    Serial.printf("\n");
 }
