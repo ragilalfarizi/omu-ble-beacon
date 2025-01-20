@@ -126,7 +126,7 @@ void setup()
     xTaskCreatePinnedToCore(retrieveGPSData, "get GPS Data", 4096, NULL, 4, &retrieveGPSHandler, 1);
     xTaskCreatePinnedToCore(countingHourMeter, "Updating Hour Meter", 8192, NULL, 3, &countingHMHandler, 0);
     xTaskCreatePinnedToCore(serialConfig, "Updating setting", 4096, NULL, 3, &settingUARTHandler, 1);
-    xTaskCreatePinnedToCore(checkDeepSleepTask, "Check Deep Sleep", 4096, NULL, 1, &settingUARTHandler, 1);
+    xTaskCreatePinnedToCore(checkDeepSleepTask, "Check Deep Sleep", 4096, NULL, 1, &checkSleepHandler, 1);
 }
 
 void loop()
@@ -556,7 +556,7 @@ static void checkDeepSleepTask(void *param)
 
                 float averageVoltage = sum / vectorSize;
                 // Serial.print("Average Voltage: ");
-                Serial.println(averageVoltage);
+                Serial.printf("Battery voltage : %.2f\n", averageVoltage);
 
                 // Check if average voltage is below the threshold
                 if (averageVoltage < BATTERY_THRESHOLD)
