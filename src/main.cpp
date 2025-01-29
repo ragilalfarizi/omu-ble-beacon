@@ -574,6 +574,9 @@ static void checkDeepSleepTask(void *param)
 
                     vTaskDelay(pdMS_TO_TICKS(100));
 
+                    // Make GPS to be StandbyMode
+                    Serial.println("$PMTK161,0*28");
+
                     Serial.flush();
                     esp_deep_sleep_start();
                 }
