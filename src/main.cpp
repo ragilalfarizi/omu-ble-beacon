@@ -111,7 +111,7 @@ void setup()
     /* HOUR METER INIT */
     hm             = new HourMeter();
     data.hourMeter = hm->loadHMFromStorage();
-    Serial.printf("[HM] Hour Meter yang tersimpan adalah %ld\n", data.hourMeter);
+    Serial.printf("[HM] Hour Meter yang tersimpan adalah %.2f Hrs\n", data.hourMeter / 3600);
     // TODO: Print juga hour meter dalam jam
 
     /* LOAD SETTING */
@@ -183,7 +183,7 @@ static void dataAcquisition(void *pvParam)
             Serial.printf("GPS LATITUDE\t\t= %f\n", data.gps.latitude);
             Serial.printf("GPS LONGITUDE\t\t= %f\n", data.gps.longitude);
             Serial.printf("Analog Input\t\t= %.2f V\n", data.voltageSupply);
-            Serial.printf("Hour Meter\t\t= %ld s\n", data.hourMeter);
+            Serial.printf("Hour Meter\t\t= %.3f Hrs\n", static_cast<float>(data.hourMeter / 3600.0f));
             Serial.printf("============================================\n");
             Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID);
             Serial.printf("[setting] threshold HM\t\t: %.2f V\n", setting.thresholdHM);
@@ -490,7 +490,12 @@ static bool updateConfigFromUART(Setting_t &setting, const String &input)
         if (fourthComma > thirdComma + 1)
         {
             String hourMeterPart = tail.substring(thirdComma + 1, fourthComma);
-            data.hourMeter       = hourMeterPart.toInt(); // Extract hour meter value
+            // TODO: Recheck because when user input .3f or more, it will be containing commas
+            float HMcomma = hourMeterPart.toFloat();
+            // Serial.printf("float HM : %.f\n", HMcomma);
+            time_t tempInput = static_cast<time_t>(hourMeterPart.toFloat() * 3600);
+            // Serial.printf("float HM : %d\n", tempInput);
+            data.hourMeter = static_cast<time_t>(hourMeterPart.toFloat() * 3600); // Extract hour meter value
         }
 
         // Extract the last part (Done)
