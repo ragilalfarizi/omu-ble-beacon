@@ -16,7 +16,7 @@
 #include "id_management.h"
 #include "rtc.h"
 
-#define FIRMWARE_VERSION "v1.3.1"
+#define FIRMWARE_VERSION "v1.5.0-alpha-feature/add-offset-for-HM"
 
 /* DEKLARASI OBJEK YANG DIGUNAKAN TERSIMPAN DI HEAP */
 RTC         *rtc;
@@ -25,15 +25,17 @@ GPS         *gps;
 HourMeter   *hm;
 
 /* FORWARD DECLARATION UNTUK FUNGSI-FUNGSI DI DEPAN*/
-static void dataAcquisition(void *pvParam);
-static void sendBLEData(void *pvParam);
-static void retrieveGPSData(void *pvParam);
-static void sendToRS485(void *pvParam);
-static void countingHourMeter(void *pvParam);
-static void serialConfig(void *pvParam);
-static void checkDeepSleepTask(void *param);
-static void setCustomBeacon();
-static bool updateConfigFromUART(Setting_t &setting, const String &input);
+static void  dataAcquisition(void *pvParam);
+static void  sendBLEData(void *pvParam);
+static void  retrieveGPSData(void *pvParam);
+static void  sendToRS485(void *pvParam);
+static void  countingHourMeter(void *pvParam);
+static void  serialConfig(void *pvParam);
+static void  checkDeepSleepTask(void *param);
+static void  setCustomBeacon();
+static bool  updateConfigFromUART(Setting_t &setting, const String &input);
+static void  printFirmwareVersion();
+static float calculateHMOffset(time_t seconds, float offset);
 
 /* FORWARD DECLARATION UNTUK HANDLER DAN SEMAPHORE RTOS */
 TaskHandle_t      dataAcquisitionHandler = NULL;
@@ -55,7 +57,7 @@ Setting_t       setting;
 float           scaleAdjusted;
 uint16_t        glitchCounter = 0;
 SystemState_t   currentState;
-static void     printFirmwareVersion();
+float           hourMeterInHours;
 
 void setup()
 {
@@ -111,14 +113,16 @@ void setup()
     /* HOUR METER INIT */
     hm             = new HourMeter();
     data.hourMeter = hm->loadHMFromStorage();
-    Serial.printf("[HM] Hour Meter yang tersimpan adalah %.2f Hrs\n", data.hourMeter / 3600);
-    // TODO: Print juga hour meter dalam jam
+    Serial.printf("[HM] Hour Meter yang tersimpan : %d s\n", data.hourMeter);
+    hourMeterInHours = data.hourMeter / 3600.f;
+    Serial.printf("[HM] Hour Meter yang tersimpan : %.2f Hrs\n", hourMeterInHours);
 
     /* LOAD SETTING */
     setting = hm->loadSetting();
     Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID);
-    Serial.printf("[setting] threshold HM\t\t: %.2f\n", setting.thresholdHM);
+    Serial.printf("[setting] threshold HM\t: %.2f\n", setting.thresholdHM);
     Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
+    Serial.printf("[setting] offsetHM \t\t: %.2f %%\n", setting.offsetHM);
     scaleAdjusted = setting.offsetAnalogInput;
 
     /* ENABLING ESP32 DEEP SLEEP BY TIMER */
@@ -179,16 +183,18 @@ static void dataAcquisition(void *pvParam)
 
             // Print output
             Serial.printf("============================================\n");
-            Serial.printf("GPS STATUS\t\t= %c\n", data.gps.status);
-            Serial.printf("GPS LATITUDE\t\t= %f\n", data.gps.latitude);
-            Serial.printf("GPS LONGITUDE\t\t= %f\n", data.gps.longitude);
-            Serial.printf("Analog Input\t\t= %.2f V\n", data.voltageSupply);
-            Serial.printf("Hour Meter\t\t= %.3f Hrs\n", static_cast<float>(data.hourMeter / 3600.0f));
+            Serial.printf("GPS STATUS\t\t\t= %c\n", data.gps.status);
+            Serial.printf("GPS LATITUDE\t\t\t= %f\n", data.gps.latitude);
+            Serial.printf("GPS LONGITUDE\t\t\t= %f\n", data.gps.longitude);
+            Serial.printf("Analog Input\t\t\t= %.2f V\n", data.voltageSupply);
+            Serial.printf("Hour Meter\t\t\t= %.3f Hrs\n", static_cast<float>(data.hourMeter / 3600.0f));
+            Serial.printf("Hour Meter + offset\t\t= %.3f Hrs\n", calculateHMOffset(data.hourMeter, setting.offsetHM));
             Serial.printf("============================================\n");
             Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID);
-            Serial.printf("[setting] threshold HM\t\t: %.2f V\n", setting.thresholdHM);
+            Serial.printf("[setting] threshold HM\t: %.2f V\n", setting.thresholdHM);
             Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
-            Serial.printf("[Err. Counter] Glitch Counter\t: %d\n", glitchCounter);
+            Serial.printf("[setting] offsetHM \t\t: %.2f%%\n", setting.offsetHM);
+            Serial.printf("[Err] Glitch Counter\t\t: %d\n", glitchCounter);
             Serial.printf("============================================\n");
 
             xSemaphoreGive(dataReadySemaphore);
@@ -381,8 +387,9 @@ static void countingHourMeter(void *pvParam)
     DateTime startTime, currentTime, previousTime;
     int8_t   intervalRaw  = 0;
     time_t   intervalTime = 0;
+    bool     isCounting   = false; // Tracks if counting has started
+    float    offsetValue  = 0;
     // time_t runTimeAccrued = 0;
-    bool isCounting = false; // Tracks if counting has started
 
     while (1)
     {
@@ -460,13 +467,14 @@ static bool updateConfigFromUART(Setting_t &setting, const String &input)
         String tail = input.substring(input.indexOf(',') + 1);
 
         // Now, tail holds everything after "CONFIG", such as
-        // "CD0002,24,0.1,987,DONE"
+        // "CD0002,24.8,0.1,98.5,0.2,DONE"
 
         // Find the positions of the commas
         int firstComma  = tail.indexOf(',');
         int secondComma = tail.indexOf(',', firstComma + 1);
         int thirdComma  = tail.indexOf(',', secondComma + 1);
         int fourthComma = tail.indexOf(',', thirdComma + 1);
+        int fifthComma  = tail.indexOf(',', fourthComma + 1);
 
         // Parse each part of the string after "CONFIG"
         if (firstComma > 0)
@@ -496,6 +504,12 @@ static bool updateConfigFromUART(Setting_t &setting, const String &input)
             time_t tempInput = static_cast<time_t>(hourMeterPart.toFloat() * 3600);
             // Serial.printf("float HM : %d\n", tempInput);
             data.hourMeter = static_cast<time_t>(hourMeterPart.toFloat() * 3600); // Extract hour meter value
+        }
+
+        if (fifthComma > fourthComma + 1)
+        {
+            String offsetHMPart = tail.substring(fourthComma + 1, fifthComma);
+            setting.offsetHM    = offsetHMPart.toFloat(); // Extract offsetHM value
         }
 
         // Extract the last part (Done)
@@ -609,4 +623,15 @@ static void printFirmwareVersion()
     Serial.printf("##                                    ##\n");
     Serial.printf("########################################\n");
     Serial.printf("\n");
+}
+
+/**
+ * @brief calculate seconds of hour meter into hours of hour meter with offset
+ * @retval calculatedHM hour meter with offset
+ * */
+static float calculateHMOffset(time_t seconds, float offset)
+{
+    float hour         = seconds / 3600.0f;
+    float calculatedHM = hour + (hour * (offset / 100.0f));
+    return calculatedHM;
 }
