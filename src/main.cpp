@@ -1,3 +1,4 @@
+#include <ctime>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
@@ -16,7 +17,7 @@
 #include "id_management.h"
 #include "rtc.h"
 
-#define FIRMWARE_VERSION "v1.5.0-alpha-feature/add-offset-for-HM"
+#define FIRMWARE_VERSION "v1.5.1-alpha-fix/beaconing-offset-HM"
 
 /* DEKLARASI OBJEK YANG DIGUNAKAN TERSIMPAN DI HEAP */
 RTC         *rtc;
@@ -25,17 +26,18 @@ GPS         *gps;
 HourMeter   *hm;
 
 /* FORWARD DECLARATION UNTUK FUNGSI-FUNGSI DI DEPAN*/
-static void  dataAcquisition(void *pvParam);
-static void  sendBLEData(void *pvParam);
-static void  retrieveGPSData(void *pvParam);
-static void  sendToRS485(void *pvParam);
-static void  countingHourMeter(void *pvParam);
-static void  serialConfig(void *pvParam);
-static void  checkDeepSleepTask(void *param);
-static void  setCustomBeacon();
-static bool  updateConfigFromUART(Setting_t &setting, const String &input);
-static void  printFirmwareVersion();
-static float calculateHMOffset(time_t seconds, float offset);
+static void   dataAcquisition(void *pvParam);
+static void   sendBLEData(void *pvParam);
+static void   retrieveGPSData(void *pvParam);
+static void   sendToRS485(void *pvParam);
+static void   countingHourMeter(void *pvParam);
+static void   serialConfig(void *pvParam);
+static void   checkDeepSleepTask(void *param);
+static void   setCustomBeacon();
+static bool   updateConfigFromUART(Setting_t &setting, const String &input);
+static void   printFirmwareVersion();
+static float  calculateHMOffset(time_t seconds, float offset);
+static time_t calculateHMOffsetSeconds(time_t seconds, float offset);
 
 /* FORWARD DECLARATION UNTUK HANDLER DAN SEMAPHORE RTOS */
 TaskHandle_t      dataAcquisitionHandler = NULL;
@@ -187,14 +189,18 @@ static void dataAcquisition(void *pvParam)
             Serial.printf("GPS LATITUDE\t\t\t= %f\n", data.gps.latitude);
             Serial.printf("GPS LONGITUDE\t\t\t= %f\n", data.gps.longitude);
             Serial.printf("Analog Input\t\t\t= %.2f V\n", data.voltageSupply);
-            Serial.printf("Hour Meter\t\t\t= %.3f Hrs\n", static_cast<float>(data.hourMeter / 3600.0f));
-            Serial.printf("Hour Meter + offset\t\t= %.3f Hrs\n", calculateHMOffset(data.hourMeter, setting.offsetHM));
+            Serial.printf("Hour Meter(seconds)\t\t= %ld s\n", data.hourMeter);
+            Serial.printf("Hour Meter + offset(seconds)\t= %ld s\n",
+                          calculateHMOffsetSeconds(data.hourMeter, setting.offsetHM));
+            Serial.printf("Hour Meter(hours)\t\t= %.3f Hrs\n", static_cast<float>(data.hourMeter / 3600.0f));
+            Serial.printf("Hour Meter + offset(hours)\t= %.3f Hrs\n",
+                          calculateHMOffset(data.hourMeter, setting.offsetHM));
             Serial.printf("============================================\n");
             Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID);
-            Serial.printf("[setting] threshold HM\t: %.2f V\n", setting.thresholdHM);
+            Serial.printf("[setting] threshold HM\t\t: %.2f V\n", setting.thresholdHM);
             Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
             Serial.printf("[setting] offsetHM \t\t: %.2f%%\n", setting.offsetHM);
-            Serial.printf("[Err] Glitch Counter\t\t: %d\n", glitchCounter);
+            // Serial.printf("[Err] Glitch Counter\t\t: %d\n", glitchCounter);
             Serial.printf("============================================\n");
 
             xSemaphoreGive(dataReadySemaphore);
@@ -236,6 +242,12 @@ static void setCustomBeacon()
     int32_t  latitudeFixedPoint  = (int32_t)(data.gps.latitude * 256);
     int32_t  longitudeFixedPoint = (int32_t)(data.gps.longitude * 256);
 
+    // TODO: add offset to the hourmeter first
+    time_t offsettedSecondsHM = calculateHMOffsetSeconds(data.hourMeter, setting.offsetHM);
+
+    // NOTE: DEBUG
+    // Serial.printf("[DEBUG] original HM -> %ld, offsettedHM -> %ld\n", data.hourMeter, offsettedSecondsHM);
+
     beacon_data[0]  = static_cast<uint8_t>(id); // List ID
     beacon_data[1]  = ((number & 0xFF00) >> 8); // Upper ID Digit
     beacon_data[2]  = (number & 0xFF);          // Lower ID Digit
@@ -251,10 +263,10 @@ static void setCustomBeacon()
     beacon_data[12] = ((latitudeFixedPoint & 0xFF0000) >> 16);    //
     beacon_data[13] = ((latitudeFixedPoint & 0xFF00) >> 8);       //
     beacon_data[14] = (latitudeFixedPoint & 0xFF);                //
-    beacon_data[15] = ((data.hourMeter & 0xFF000000) >> 24);      //
-    beacon_data[16] = ((data.hourMeter & 0xFF0000) >> 16);        //
-    beacon_data[17] = ((data.hourMeter & 0xFF00) >> 8);           //
-    beacon_data[18] = (data.hourMeter & 0xFF);                    //
+    beacon_data[15] = ((offsettedSecondsHM & 0xFF000000) >> 24);  //
+    beacon_data[16] = ((offsettedSecondsHM & 0xFF0000) >> 16);    //
+    beacon_data[17] = ((offsettedSecondsHM & 0xFF00) >> 8);       //
+    beacon_data[18] = (offsettedSecondsHM & 0xFF);                //
 
     oScanResponseData.setServiceData(BLEUUID(beaconUUID), std::string(beacon_data, sizeof(beacon_data)));
     oAdvertisementData.setName("UMO BEACON");
@@ -633,5 +645,11 @@ static float calculateHMOffset(time_t seconds, float offset)
 {
     float hour         = seconds / 3600.0f;
     float calculatedHM = hour + (hour * (offset / 100.0f));
+    return calculatedHM;
+}
+
+static time_t calculateHMOffsetSeconds(time_t seconds, float offset)
+{
+    time_t calculatedHM = static_cast<time_t>(round(seconds + (seconds * (offset / 100.0f))));
     return calculatedHM;
 }
