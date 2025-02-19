@@ -17,7 +17,7 @@
 #include "id_management.h"
 #include "rtc.h"
 
-#define FIRMWARE_VERSION "v1.5.1-alpha-fix/beaconing-offset-HM"
+#define FIRMWARE_VERSION "v1.5.2-alpha-fix/offset-HM-when-trigerred"
 
 /* DEKLARASI OBJEK YANG DIGUNAKAN TERSIMPAN DI HEAP */
 RTC         *rtc;
@@ -416,6 +416,11 @@ static void countingHourMeter(void *pvParam)
                               startTime.hour(), startTime.minute(), startTime.second());
                 isCounting = true;
 
+                // WIP: add 10 di depan
+                intervalTime = 10;
+                data.hourMeter += intervalTime;
+                hm->saveToStorage(data.hourMeter);
+
                 previousTime = startTime;
             }
 
@@ -436,12 +441,11 @@ static void countingHourMeter(void *pvParam)
             }
 
             // NOTE: UNCOMMENT TO DEBUG
-            /**
+
             Serial.printf("============================================\n");
-            Serial.printf("[DEBUG] current - start = %d - %d = %d \n",
-            currentTime.secondstime(), startTime.secondstime(), runTimeAccrued);
+            Serial.printf("[DEBUG] current - start = %d - %d = %d \n", currentTime.secondstime(),
+                          startTime.secondstime(), intervalRaw);
             Serial.printf("============================================\n");
-            */
 
             data.hourMeter += intervalTime;
 
