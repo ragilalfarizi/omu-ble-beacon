@@ -17,7 +17,7 @@
 #include "id_management.h"
 #include "rtc.h"
 
-#define FIRMWARE_VERSION "v1.5.2-alpha-fix/offset-HM-when-trigerred"
+#define FIRMWARE_VERSION "v1.5.2"
 
 /* DEKLARASI OBJEK YANG DIGUNAKAN TERSIMPAN DI HEAP */
 RTC         *rtc;
