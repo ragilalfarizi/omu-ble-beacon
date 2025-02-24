@@ -1,5 +1,8 @@
 #include "ble.h"
 
+static const char *_SSID     = "ESP32_OTA";
+static const char *_password = "1234567890";
+
 /* PUBLIC METHOD */
 BLE::BLE()
 {
@@ -10,6 +13,27 @@ void BLE::begin()
     BLEDevice::init("");
     BLEDevice::setPower(ESP_PWR_LVL_N12);
     _pAdvertising = BLEDevice::getAdvertising();
+
+    // create server
+    _pServer = NimBLEDevice::createServer();
+
+    // create service
+    _pService = _pServer->createService(SERVICE_UUID);
+
+    // create characteristic
+    _pCharacteristic =
+        _pService->createCharacteristic(CHARACTERISTIC_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
+
+    // create callback
+    _pCharacteristic->setCallbacks(new OTACallback());
+
+    // start the service
+    _pService->start();
+
+    // Start Advertising
+    _pAdvertisingOTA = NimBLEDevice::getAdvertising();
+    _pAdvertisingOTA->addServiceUUID(SERVICE_UUID);
+    _pAdvertisingOTA->start();
 }
 
 void BLE::setCustomBeacon(BeaconData_t &data, Setting_t &setting)
