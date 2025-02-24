@@ -1,7 +1,7 @@
 #include "ble.h"
 
-static const char *_SSID     = "ESP32_OTA";
-static const char *_password = "1234567890";
+const char *BLE::_SSID     = "ESP32-WIFI-RAGIL";
+const char *BLE::_password = "1234567890";
 
 /* PUBLIC METHOD */
 BLE::BLE()
@@ -108,6 +108,45 @@ void BLE::setCustomBeacon(BeaconData_t &data, Setting_t &setting)
 void BLE::advertiseBeacon()
 {
     _pAdvertising->start();
+}
+
+void BLE::startWiFi()
+{
+    _wifi = new WiFiClass();
+
+    // WiFi.mode(WIFI_AP);
+    // WiFi.xPower(WIFI_POWER_MINUS_1dBm);
+    // WiFi.softAP(_SSID, _password);
+
+    // WARNING: - The BLE off automatically when WIFI is on.
+    // - WIFI can't be turned on while charging. (brownout detected)
+
+    Serial.printf("Free heap before WiFi: %u\n", ESP.getFreeHeap());
+    _wifi->mode(WIFI_AP);
+    // _wifi->setTxPower(WIFI_POWER_MINUS_1dBm);
+    _wifi->softAP(_SSID, _password);
+    // _wifi->setSleep(true);
+    Serial.printf("Free heap after WiFi: %u\n", ESP.getFreeHeap());
+
+    // WiFi.mode(WIFI_STA);
+    // WiFi.begin("POCO X5 5G", "gantengsekali");
+    // Serial.print("Connecting to WiFi...");
+    // while (WiFi.status() != WL_CONNECTED)
+    // {
+    //     Serial.print(".");
+    //     delay(100);
+    // }
+    //
+    // Serial.println("\n✅ Connected!");
+    // Serial.print("STA IP: ");
+    // Serial.println(WiFi.localIP());
+
+    Serial.printf("WiFi AP is Started! SSID: %s\n", _SSID);
+}
+
+void BLE::startHTTPServer()
+{
+    _server = new WebServer(80);
 }
 
 /* PRIVATE METHOD */
