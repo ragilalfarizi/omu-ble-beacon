@@ -19,6 +19,7 @@ struct BeaconData_t
     GPSData_t gps;
     float     voltageSupply;
     time_t    hourMeter;
+    float     hourMeterWithOffset;
 };
 
 struct Setting_t
@@ -26,6 +27,7 @@ struct Setting_t
     String ID;
     float  thresholdHM;
     float  offsetAnalogInput;
+    float  offsetHM;
 };
 
 enum ListID_t

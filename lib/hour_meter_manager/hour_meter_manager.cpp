@@ -118,6 +118,7 @@ Setting_t HourMeter::loadSetting()
         setting.ID                = doc["ID"].as<String>();
         setting.thresholdHM       = doc["thresholdHM"].as<float>();
         setting.offsetAnalogInput = doc["offsetAnalogInput"].as<float>();
+        setting.offsetHM          = doc["offsetHM"].as<float>();
 
         Serial.println("Successfully read settings from settings.json");
         file.close();
@@ -139,6 +140,7 @@ void HourMeter::saveSettings(const Setting_t &setting)
     doc["ID"]                = setting.ID;
     doc["thresholdHM"]       = setting.thresholdHM;
     doc["offsetAnalogInput"] = setting.offsetAnalogInput;
+    doc["offsetHM"]          = setting.offsetHM;
 
     // Open settings.json file for writing
     File file = LittleFS.open("/settings.json", "w");
