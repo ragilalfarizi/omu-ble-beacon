@@ -115,13 +115,13 @@ void setup()
     /* HOUR METER INIT */
     hm             = new HourMeter();
     data.hourMeter = hm->loadHMFromStorage();
-    Serial.printf("[HM] Hour Meter yang tersimpan : %d s\n", data.hourMeter);
+    Serial.printf("[HM] Hour Meter yang tersimpan : %ld s\n", data.hourMeter);
     hourMeterInHours = data.hourMeter / 3600.f;
     Serial.printf("[HM] Hour Meter yang tersimpan : %.2f Hrs\n", hourMeterInHours);
 
     /* LOAD SETTING */
     setting = hm->loadSetting();
-    Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID);
+    Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID.c_str());
     Serial.printf("[setting] threshold HM\t: %.2f\n", setting.thresholdHM);
     Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
     Serial.printf("[setting] offsetHM \t\t: %.2f %%\n", setting.offsetHM);
@@ -196,7 +196,7 @@ static void dataAcquisition(void *pvParam)
             Serial.printf("Hour Meter + offset(hours)\t= %.3f Hrs\n",
                           calculateHMOffset(data.hourMeter, setting.offsetHM));
             Serial.printf("============================================\n");
-            Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID);
+            Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID.c_str());
             Serial.printf("[setting] threshold HM\t\t: %.2f V\n", setting.thresholdHM);
             Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
             Serial.printf("[setting] offsetHM \t\t: %.2f%%\n", setting.offsetHM);
