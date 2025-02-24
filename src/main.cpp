@@ -17,7 +17,7 @@
 #include "id_management.h"
 #include "rtc.h"
 
-#define FIRMWARE_VERSION "v1.5.2"
+#define FIRMWARE_VERSION "v1.6.0-alpha-feature/ble-ota"
 
 /* DEKLARASI OBJEK YANG DIGUNAKAN TERSIMPAN DI HEAP */
 RTC         *rtc;
@@ -269,7 +269,7 @@ static void setCustomBeacon()
     beacon_data[18] = (offsettedSecondsHM & 0xFF);                //
 
     oScanResponseData.setServiceData(BLEUUID(beaconUUID), std::string(beacon_data, sizeof(beacon_data)));
-    oAdvertisementData.setName("UMO BEACON");
+    oAdvertisementData.setName(setting.ID.c_str());
     pAdvertising->setAdvertisementData(oAdvertisementData);
     pAdvertising->setScanResponseData(oScanResponseData);
 }
