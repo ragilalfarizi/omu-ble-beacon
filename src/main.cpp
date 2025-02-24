@@ -15,15 +15,17 @@
 #include "gps.h"
 #include "hour_meter_manager.h"
 #include "id_management.h"
+#include "pinDebug.h"
 #include "rtc.h"
 
-#define FIRMWARE_VERSION "v1.5.2-alpha-fix/offset-HM-when-trigerred"
+#define FIRMWARE_VERSION "v1.5.3-alpha-bugfix/optimize-response-HM"
 
 /* DEKLARASI OBJEK YANG DIGUNAKAN TERSIMPAN DI HEAP */
 RTC         *rtc;
 AnalogInput *ain;
 GPS         *gps;
 HourMeter   *hm;
+PinDebug    *debugPin;
 
 /* FORWARD DECLARATION UNTUK FUNGSI-FUNGSI DI DEPAN*/
 static void   dataAcquisition(void *pvParam);
@@ -66,6 +68,10 @@ void setup()
     /* SERIAL INIT */
     Serial.begin(9600);
     Serial.println("[Serial] Mesin dinyalakan");
+
+    /* DEBUG RTOS */
+
+    debugPin = new PinDebug({PIN_DIGITAL_OUT_1, PIN_DIGITAL_OUT_2, PIN_DIGITAL_OUT_3, PIN_DIGITAL_OUT_4});
 
     /* PRINT FIRMWARE VERSION */
     printFirmwareVersion();
@@ -150,62 +156,67 @@ static void dataAcquisition(void *pvParam)
 
     while (1)
     {
-        if (xSemaphoreTake(dataReadySemaphore, portMAX_DELAY) == pdTRUE)
+        // if (xSemaphoreTake(dataReadySemaphore, portMAX_DELAY) == pdTRUE)
+        // {
+        // debugPin->togglePin(PIN_DIGITAL_OUT_2);
+        // digitalWrite(PIN_DIGITAL_OUT_2, LOW);
+
+        data.voltageSupply = ain->readAnalogInput(AnalogPin::PIN_A0);
+
+        float currentLatitude  = gps->getlatitude();
+        float currentLongitude = gps->getLongitude();
+
+        // Check for changes
+        latitudeStalled  = fabs(currentLatitude - previousLatitude) < 0.00000001; // Adjust threshold if needed
+        longitudeStalled = fabs(currentLongitude - previousLongitude) < 0.00000001;
+
+        if (latitudeStalled && longitudeStalled)
         {
-            data.voltageSupply = ain->readAnalogInput(AnalogPin::PIN_A0);
-
-            float currentLatitude  = gps->getlatitude();
-            float currentLongitude = gps->getLongitude();
-
-            // Check for changes
-            latitudeStalled  = fabs(currentLatitude - previousLatitude) < 0.00000001; // Adjust threshold if needed
-            longitudeStalled = fabs(currentLongitude - previousLongitude) < 0.00000001;
-
-            if (latitudeStalled && longitudeStalled)
+            // ; // Increment by task delay
+            if (stallCounter >= STALL_TOLERANCE_MS)
             {
-                ; // Increment by task delay
-                if (stallCounter >= STALL_TOLERANCE_MS)
-                {
-                    data.gps.status = 'V'; // Mark as invalid after tolerance
-                }
+                data.gps.status = 'V'; // Mark as invalid after tolerance
             }
-            else
-            {
-                stallCounter    = 0;   // Reset counter if data changes
-                data.gps.status = 'A'; // Mark as active
-            }
-
-            // Store current values for next comparison
-            previousLatitude  = currentLatitude;
-            previousLongitude = currentLongitude;
-
-            // Save data
-            data.gps.latitude  = currentLatitude;
-            data.gps.longitude = currentLongitude;
-
-            // Print output
-            Serial.printf("============================================\n");
-            Serial.printf("GPS STATUS\t\t\t= %c\n", data.gps.status);
-            Serial.printf("GPS LATITUDE\t\t\t= %f\n", data.gps.latitude);
-            Serial.printf("GPS LONGITUDE\t\t\t= %f\n", data.gps.longitude);
-            Serial.printf("Analog Input\t\t\t= %.2f V\n", data.voltageSupply);
-            Serial.printf("Hour Meter(seconds)\t\t= %ld s\n", data.hourMeter);
-            Serial.printf("Hour Meter + offset(seconds)\t= %ld s\n",
-                          calculateHMOffsetSeconds(data.hourMeter, setting.offsetHM));
-            Serial.printf("Hour Meter(hours)\t\t= %.3f Hrs\n", static_cast<float>(data.hourMeter / 3600.0f));
-            Serial.printf("Hour Meter + offset(hours)\t= %.3f Hrs\n",
-                          calculateHMOffset(data.hourMeter, setting.offsetHM));
-            Serial.printf("============================================\n");
-            Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID);
-            Serial.printf("[setting] threshold HM\t\t: %.2f V\n", setting.thresholdHM);
-            Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
-            Serial.printf("[setting] offsetHM \t\t: %.2f%%\n", setting.offsetHM);
-            // Serial.printf("[Err] Glitch Counter\t\t: %d\n", glitchCounter);
-            Serial.printf("============================================\n");
-
-            xSemaphoreGive(dataReadySemaphore);
-            vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for 1 second
         }
+        else
+        {
+            stallCounter    = 0;   // Reset counter if data changes
+            data.gps.status = 'A'; // Mark as active
+        }
+
+        // Store current values for next comparison
+        previousLatitude  = currentLatitude;
+        previousLongitude = currentLongitude;
+
+        // Save data
+        data.gps.latitude  = currentLatitude;
+        data.gps.longitude = currentLongitude;
+
+        // Print output
+        Serial.printf("============================================\n");
+        Serial.printf("GPS STATUS\t\t\t= %c\n", data.gps.status);
+        Serial.printf("GPS LATITUDE\t\t\t= %f\n", data.gps.latitude);
+        Serial.printf("GPS LONGITUDE\t\t\t= %f\n", data.gps.longitude);
+        Serial.printf("Analog Input\t\t\t= %.2f V\n", data.voltageSupply);
+        Serial.printf("Hour Meter(seconds)\t\t= %ld s\n", data.hourMeter);
+        Serial.printf("Hour Meter + offset(seconds)\t= %ld s\n",
+                      calculateHMOffsetSeconds(data.hourMeter, setting.offsetHM));
+        Serial.printf("Hour Meter(hours)\t\t= %.3f Hrs\n", static_cast<float>(data.hourMeter / 3600.0f));
+        Serial.printf("Hour Meter + offset(hours)\t= %.3f Hrs\n", calculateHMOffset(data.hourMeter, setting.offsetHM));
+        Serial.printf("============================================\n");
+        Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID);
+        Serial.printf("[setting] threshold HM\t\t: %.2f V\n", setting.thresholdHM);
+        Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
+        Serial.printf("[setting] offsetHM \t\t: %.2f%%\n", setting.offsetHM);
+        // Serial.printf("[Err] Glitch Counter\t\t: %d\n", glitchCounter);
+        Serial.printf("============================================\n");
+
+        xSemaphoreGive(dataReadySemaphore);
+        // debugPin->togglePin(PIN_DIGITAL_OUT_2);
+        // digitalWrite(PIN_DIGITAL_OUT_2, HIGH);
+
+        vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for 1 second
+        // }
     }
 }
 
@@ -405,6 +416,10 @@ static void countingHourMeter(void *pvParam)
 
     while (1)
     {
+        // debugPin->togglePin(PIN_DIGITAL_OUT_1);
+
+        // digitalWrite(PIN_DIGITAL_OUT_1, LOW);
+
         if (data.voltageSupply >= setting.thresholdHM)
         {
             if (!isCounting)
@@ -417,9 +432,9 @@ static void countingHourMeter(void *pvParam)
                 isCounting = true;
 
                 // WIP: add 10 di depan
-                intervalTime = 10;
-                data.hourMeter += intervalTime;
-                hm->saveToStorage(data.hourMeter);
+                // intervalTime = 10;
+                // data.hourMeter += intervalTime;
+                // hm->saveToStorage(data.hourMeter);
 
                 previousTime = startTime;
             }
@@ -463,14 +478,20 @@ static void countingHourMeter(void *pvParam)
             }
 
             startTime = currentTime; // Update start time for the next interval
+            // digitalWrite(PIN_DIGITAL_OUT_1, HIGH);
+
+            vTaskDelay(pdMS_TO_TICKS(10000));
         }
         else
         {
             // Serial.println("[HM] Voltage below threshold, counting paused.");
             isCounting = false; // Reset counting state
+            vTaskDelay(pdMS_TO_TICKS(100));
         }
 
-        vTaskDelay(pdMS_TO_TICKS(10000));
+        // digitalWrite(PIN_DIGITAL_OUT_1, HIGH);
+
+        // debugPin->togglePin(PIN_DIGITAL_OUT_1);
     }
 }
 
@@ -550,83 +571,83 @@ static void checkDeepSleepTask(void *param)
 
     while (1)
     {
-        if (xSemaphoreTake(dataReadySemaphore, portMAX_DELAY) == pdTRUE)
+        // if (xSemaphoreTake(dataReadySemaphore, portMAX_DELAY) == pdTRUE)
+        // {
+        if (data.voltageSupply > LOWEST_ANALOG_THRESHOLD)
         {
-            if (data.voltageSupply > LOWEST_ANALOG_THRESHOLD)
+            // Serial.println("Adapter is plugged in. Keeping system running.");
+            currentState = NORMAL;
+        }
+        else
+        {
+            // Serial.printf("Analog Input is less than %.2f V. Reading the battery
+            // voltage..\n", LOWEST_ANALOG_THRESHOLD);
+            currentState = ON_BATTERY;
+
+            // enable pin to read battery voltage
+            digitalWrite(PIN_EN_READ_BATT_VOLT, HIGH);
+            vTaskDelay(pdMS_TO_TICKS(100));
+
+            // Monitor battery voltage for 15 seconds
+            unsigned long startTime     = millis();
+            int           voltageSum    = 0;
+            int           readingsCount = 0;
+
+            while (millis() - startTime < MONITOR_DURATION)
             {
-                // Serial.println("Adapter is plugged in. Keeping system running.");
-                currentState = NORMAL;
+                int16_t batteryADC     = analogRead(PIN_READ_BATT_VOLT);
+                float   batteryVoltage = calculateBatteryVoltage(batteryADC);
+                // Serial.printf("batteryVoltage : %.2f\n", batteryVoltage);
+
+                batteryVoltageReadings.push_back(batteryVoltage);
+
+                // voltageSum += batteryVoltage;
+                // readingsCount++;
+                delay(500); // Read battery voltage every 500ms
+            }
+
+            // Calculate the average battery voltage
+            float sum = std::accumulate(batteryVoltageReadings.begin(), batteryVoltageReadings.end(), 0.0f);
+            // Serial.printf("Sum of Batt Voltage : %f\n", sum);
+
+            size_t vectorSize = batteryVoltageReadings.size();
+            // Serial.printf("Size of Batt Voltage Vector : %d\n", vectorSize);
+
+            float averageVoltage = sum / vectorSize;
+            // Serial.print("Average Voltage: ");
+            Serial.printf("Battery voltage : %.2f\n", averageVoltage);
+
+            // Check if average voltage is below the threshold
+            if (averageVoltage < BATTERY_THRESHOLD)
+            {
+                Serial.println("Battery voltage is critically low. Entering deep sleep...");
+
+                // PIN CHG_STS will be low when the adaptor is plugged in again.
+                esp_sleep_enable_ext0_wakeup(GPIO_NUM_35, 0); // 1 = High, 0 = Low
+                digitalWrite(PIN_EN_READ_BATT_VOLT,
+                             LOW); // Recontrol pin before sleeping
+                batteryVoltageReadings.clear();
+
+                vTaskDelay(pdMS_TO_TICKS(100));
+
+                // Make GPS to be StandbyMode
+                Serial.println("$PMTK161,0*28");
+
+                Serial.flush();
+                esp_deep_sleep_start();
             }
             else
             {
-                // Serial.printf("Analog Input is less than %.2f V. Reading the battery
-                // voltage..\n", LOWEST_ANALOG_THRESHOLD);
-                currentState = ON_BATTERY;
-
-                // enable pin to read battery voltage
-                digitalWrite(PIN_EN_READ_BATT_VOLT, HIGH);
-                vTaskDelay(pdMS_TO_TICKS(100));
-
-                // Monitor battery voltage for 15 seconds
-                unsigned long startTime     = millis();
-                int           voltageSum    = 0;
-                int           readingsCount = 0;
-
-                while (millis() - startTime < MONITOR_DURATION)
-                {
-                    int16_t batteryADC     = analogRead(PIN_READ_BATT_VOLT);
-                    float   batteryVoltage = calculateBatteryVoltage(batteryADC);
-                    // Serial.printf("batteryVoltage : %.2f\n", batteryVoltage);
-
-                    batteryVoltageReadings.push_back(batteryVoltage);
-
-                    // voltageSum += batteryVoltage;
-                    // readingsCount++;
-                    delay(500); // Read battery voltage every 500ms
-                }
-
-                // Calculate the average battery voltage
-                float sum = std::accumulate(batteryVoltageReadings.begin(), batteryVoltageReadings.end(), 0.0f);
-                // Serial.printf("Sum of Batt Voltage : %f\n", sum);
-
-                size_t vectorSize = batteryVoltageReadings.size();
-                // Serial.printf("Size of Batt Voltage Vector : %d\n", vectorSize);
-
-                float averageVoltage = sum / vectorSize;
-                // Serial.print("Average Voltage: ");
-                Serial.printf("Battery voltage : %.2f\n", averageVoltage);
-
-                // Check if average voltage is below the threshold
-                if (averageVoltage < BATTERY_THRESHOLD)
-                {
-                    Serial.println("Battery voltage is critically low. Entering deep sleep...");
-
-                    // PIN CHG_STS will be low when the adaptor is plugged in again.
-                    esp_sleep_enable_ext0_wakeup(GPIO_NUM_35, 0); // 1 = High, 0 = Low
-                    digitalWrite(PIN_EN_READ_BATT_VOLT,
-                                 LOW); // Recontrol pin before sleeping
-                    batteryVoltageReadings.clear();
-
-                    vTaskDelay(pdMS_TO_TICKS(100));
-
-                    // Make GPS to be StandbyMode
-                    Serial.println("$PMTK161,0*28");
-
-                    Serial.flush();
-                    esp_deep_sleep_start();
-                }
-                else
-                {
-                    batteryVoltageReadings.clear();
-                    // Serial.println("Battery voltage is sufficient. Continuing
-                    // operation...");
-                }
+                batteryVoltageReadings.clear();
+                // Serial.println("Battery voltage is sufficient. Continuing
+                // operation...");
             }
-
-            xSemaphoreGive(dataReadySemaphore);
-            // Small delay to prevent task starvation
-            vTaskDelay(pdMS_TO_TICKS(500));
         }
+
+        xSemaphoreGive(dataReadySemaphore);
+        // Small delay to prevent task starvation
+        vTaskDelay(pdMS_TO_TICKS(500));
+        // }
     }
 }
 
