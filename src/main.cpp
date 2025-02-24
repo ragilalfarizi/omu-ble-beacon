@@ -293,11 +293,6 @@ static void sendBLEData(void *pvParam)
     }
 }
 
-/**
- * WARNING: Haven't fully tested. It should be working.
- *          But when I tested it, it took too long to retreive
- *          GPS Data.
- * */
 static void retrieveGPSData(void *pvParam)
 {
     bool isValid = false;
@@ -416,7 +411,8 @@ static void countingHourMeter(void *pvParam)
                               startTime.hour(), startTime.minute(), startTime.second());
                 isCounting = true;
 
-                // WIP: add 10 di depan
+                // NOTE: add 10s upfront to normalize late trigger on HM
+                //       in the future, it's better to refactor RTOS task
                 intervalTime = 10;
                 data.hourMeter += intervalTime;
                 hm->saveToStorage(data.hourMeter);
