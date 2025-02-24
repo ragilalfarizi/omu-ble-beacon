@@ -13,9 +13,13 @@ void BLE::begin()
     BLEDevice::init("");
     BLEDevice::setPower(ESP_PWR_LVL_N12);
     _pAdvertising = BLEDevice::getAdvertising();
+}
 
+void BLE::startServerOTA()
+{
     // create server
     _pServer = NimBLEDevice::createServer();
+    _pServer->setCallbacks(new OTAServerCallback(this));
 
     // create service
     _pService = _pServer->createService(SERVICE_UUID);
@@ -23,9 +27,7 @@ void BLE::begin()
     // create characteristic
     _pCharacteristic =
         _pService->createCharacteristic(CHARACTERISTIC_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
-
-    // create callback
-    _pCharacteristic->setCallbacks(new OTACallback());
+    _pCharacteristic->setCallbacks(new OTACharacteristicCallback());
 
     // start the service
     _pService->start();
@@ -103,7 +105,7 @@ void BLE::setCustomBeacon(BeaconData_t &data, Setting_t &setting)
     _pAdvertising->setScanResponseData(oScanResponseData);
 }
 
-void BLE::advertise()
+void BLE::advertiseBeacon()
 {
     _pAdvertising->start();
 }

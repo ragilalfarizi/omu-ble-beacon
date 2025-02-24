@@ -5,6 +5,7 @@
 #include "NimBLEDescriptor.h"
 #include "NimBLEDevice.h"
 #include "NimBLEEddystoneURL.h"
+#include "NimBLEServer.h"
 #include "common.h"
 #include "esp_err.h"
 #include "id_management.h"
@@ -36,11 +37,39 @@ class BLE
 
     void begin();
     void setCustomBeacon(BeaconData_t &data, Setting_t &setting);
-    void advertise();
+    void advertiseBeacon();
+    void startServerOTA();
+    bool connectToWiFi();
+
+    bool isConnected = false;
+};
+
+// Custom BLE Server Callback Class
+class OTAServerCallback : public NimBLEServerCallbacks
+{
+  private:
+    BLE *_bleInstance;
+
+  public:
+    OTAServerCallback(BLE *bleInstance) : _bleInstance(bleInstance)
+    {
+    }
+
+    void onConnect(NimBLEServer *pServer) override
+    {
+        Serial.println("Device Connected!");
+        _bleInstance->isConnected = true;
+    }
+
+    void onDisconnect(NimBLEServer *pServer) override
+    {
+        Serial.println("Device Disconnected!");
+        _bleInstance->isConnected = false;
+    }
 };
 
 // Custom BLE Callback Class
-class OTACallback : public NimBLECharacteristicCallbacks
+class OTACharacteristicCallback : public NimBLECharacteristicCallbacks
 {
     void onWrite(NimBLECharacteristic *pCharacteristic) override
     {

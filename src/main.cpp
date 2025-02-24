@@ -31,7 +31,7 @@ static void   sendToRS485(void *pvParam);
 static void   countingHourMeter(void *pvParam);
 static void   serialConfig(void *pvParam);
 static void   checkDeepSleepTask(void *param);
-static void   setCustomBeacon();
+static void   OTABLEUpdate(void *pvParam);
 static bool   updateConfigFromUART(Setting_t &setting, const String &input);
 static void   printFirmwareVersion();
 static float  calculateHMOffset(time_t seconds, float offset);
@@ -45,6 +45,7 @@ TaskHandle_t      sendToRS485Handler     = NULL;
 TaskHandle_t      countingHMHandler      = NULL;
 TaskHandle_t      settingUARTHandler     = NULL;
 TaskHandle_t      checkSleepHandler      = NULL;
+TaskHandle_t      OTABLEUpdateHandler    = NULL;
 SemaphoreHandle_t xSemaphore             = NULL;
 SemaphoreHandle_t dataReadySemaphore     = NULL;
 // TaskHandle_t RTCDemoHandler = NULL;
@@ -133,6 +134,7 @@ void setup()
     xTaskCreatePinnedToCore(countingHourMeter, "Updating Hour Meter", 8192, NULL, 3, &countingHMHandler, 0);
     xTaskCreatePinnedToCore(serialConfig, "Updating setting", 4096, NULL, 3, &settingUARTHandler, 1);
     xTaskCreatePinnedToCore(checkDeepSleepTask, "Check Deep Sleep", 4096, NULL, 1, &checkSleepHandler, 1);
+    xTaskCreatePinnedToCore(OTABLEUpdate, "OTA BLE Update", 4096, NULL, 2, &OTABLEUpdateHandler, 1);
 }
 
 void loop()
@@ -277,7 +279,7 @@ static void sendBLEData(void *pvParam)
     {
         ble->setCustomBeacon(data, setting);
 
-        ble->advertise();
+        ble->advertiseBeacon();
 
         if (currentState == NORMAL)
         {
@@ -620,6 +622,24 @@ static void checkDeepSleepTask(void *param)
             // Small delay to prevent task starvation
             vTaskDelay(pdMS_TO_TICKS(500));
         }
+    }
+}
+
+static void OTABLEUpdate(void *pvParam)
+{
+    ble->startServerOTA();
+
+    while (1)
+    {
+        if (ble->isConnected)
+        {
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+        else
+        {
+            vTaskDelay(pdMS_TO_TICKS(500));
+        }
+        // do something
     }
 }
 
