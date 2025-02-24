@@ -17,7 +17,7 @@
 #include "id_management.h"
 #include "rtc.h"
 
-#define FIRMWARE_VERSION "v1.5.2-alpha-fix/offset-HM-when-trigerred"
+#define FIRMWARE_VERSION "v1.5.2"
 
 /* DEKLARASI OBJEK YANG DIGUNAKAN TERSIMPAN DI HEAP */
 RTC         *rtc;
@@ -115,13 +115,13 @@ void setup()
     /* HOUR METER INIT */
     hm             = new HourMeter();
     data.hourMeter = hm->loadHMFromStorage();
-    Serial.printf("[HM] Hour Meter yang tersimpan : %d s\n", data.hourMeter);
+    Serial.printf("[HM] Hour Meter yang tersimpan : %ld s\n", data.hourMeter);
     hourMeterInHours = data.hourMeter / 3600.f;
     Serial.printf("[HM] Hour Meter yang tersimpan : %.2f Hrs\n", hourMeterInHours);
 
     /* LOAD SETTING */
     setting = hm->loadSetting();
-    Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID);
+    Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID.c_str());
     Serial.printf("[setting] threshold HM\t: %.2f\n", setting.thresholdHM);
     Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
     Serial.printf("[setting] offsetHM \t\t: %.2f %%\n", setting.offsetHM);
@@ -196,7 +196,7 @@ static void dataAcquisition(void *pvParam)
             Serial.printf("Hour Meter + offset(hours)\t= %.3f Hrs\n",
                           calculateHMOffset(data.hourMeter, setting.offsetHM));
             Serial.printf("============================================\n");
-            Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID);
+            Serial.printf("[setting] ID\t\t\t: %s\n", setting.ID.c_str());
             Serial.printf("[setting] threshold HM\t\t: %.2f V\n", setting.thresholdHM);
             Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
             Serial.printf("[setting] offsetHM \t\t: %.2f%%\n", setting.offsetHM);
@@ -293,11 +293,6 @@ static void sendBLEData(void *pvParam)
     }
 }
 
-/**
- * WARNING: Haven't fully tested. It should be working.
- *          But when I tested it, it took too long to retreive
- *          GPS Data.
- * */
 static void retrieveGPSData(void *pvParam)
 {
     bool isValid = false;
@@ -416,7 +411,8 @@ static void countingHourMeter(void *pvParam)
                               startTime.hour(), startTime.minute(), startTime.second());
                 isCounting = true;
 
-                // WIP: add 10 di depan
+                // NOTE: add 10s upfront to normalize late trigger on HM
+                //       in the future, it's better to refactor RTOS task
                 intervalTime = 10;
                 data.hourMeter += intervalTime;
                 hm->saveToStorage(data.hourMeter);
