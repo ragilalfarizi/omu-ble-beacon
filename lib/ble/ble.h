@@ -1,19 +1,13 @@
 #pragma once
 
-#include "NimBLEAdvertising.h"
-#include "NimBLEBeacon.h"
-#include "NimBLEDescriptor.h"
-#include "NimBLEDevice.h"
-#include "NimBLEEddystoneURL.h"
-#include "NimBLEServer.h"
-#include "WiFiGeneric.h"
 #include "common.h"
-#include "esp_err.h"
 #include "id_management.h"
 #include <Arduino.h>
+#include <ESPAsyncWebServer.h>
+#include <NimBLEDevice.h>
 #include <Update.h>
-#include <WebServer.h>
 #include <WiFi.h>
+#include <esp_err.h>
 
 #define SERVICE_UUID        "6f7e9280-e3d8-47b7-9733-ef0ffffc65fd"
 #define CHARACTERISTIC_UUID "2233b614-a358-4551-8ad1-b113764c68f3"
