@@ -6,6 +6,7 @@
 #include "NimBLEDevice.h"
 #include "NimBLEEddystoneURL.h"
 #include "NimBLEServer.h"
+#include "WiFiGeneric.h"
 #include "common.h"
 #include "esp_err.h"
 #include "id_management.h"
@@ -32,8 +33,11 @@ class BLE
     NimBLECharacteristic *_pCharacteristic;
     NimBLEAdvertising    *_pAdvertisingOTA;
 
-    esp_err_t _updateFirmware();
-    time_t    _calculateHMOffsetSeconds(time_t seconds, float offset);
+    esp_err_t   _updateFirmware();
+    time_t      _calculateHMOffsetSeconds(time_t seconds, float offset);
+    void        _setNetworkConfig();
+    static void _WiFiAPConnectedCB(arduino_event_id_t e);
+    static void _WiFiAPDisconnectedCB(arduino_event_id_t e);
 
   public:
     BLE();
@@ -46,9 +50,16 @@ class BLE
     void startWiFi();
     bool connectToWiFi();
 
-    bool       isConnected = false;
-    WiFiClass *_wifi; // For WebServer
-    WebServer *_server;
+    static bool isConnectedToWiFi;
+    WiFiClass  *_wifi; // For WebServer
+    WebServer  *_server;
+
+    // Set Static IP
+    IPAddress localIP;
+    IPAddress gateway;
+    IPAddress subnet;
+    IPAddress primaryDNS;
+    IPAddress secondaryDNS;
 };
 
 // Custom BLE Server Callback Class
@@ -64,8 +75,8 @@ class OTAServerCallback : public NimBLEServerCallbacks
 
     void onConnect(NimBLEServer *pServer) override
     {
-        Serial.println("Device Connected!");
-        _bleInstance->isConnected = true;
+        Serial.println("Device is Connected to ESP32 BLE!");
+        // _bleInstance->isConnected = true;
 
         // start WiFi AP
         _bleInstance->startWiFi();
@@ -76,10 +87,8 @@ class OTAServerCallback : public NimBLEServerCallbacks
 
     void onDisconnect(NimBLEServer *pServer) override
     {
-        Serial.println("Device Disconnected!");
-        _bleInstance->isConnected = false;
+        Serial.println("Device is disconnected from ESP32 BLE!");
 
-        // delete _bleInstance->_server;
         delete _bleInstance->_wifi;
     }
 };

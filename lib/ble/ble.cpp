@@ -1,7 +1,8 @@
 #include "ble.h"
 
-const char *BLE::_SSID     = "ESP32-WIFI-RAGIL";
-const char *BLE::_password = "1234567890";
+const char *BLE::_SSID             = "ESP32-WIFI-RAGIL";
+const char *BLE::_password         = "1234567890";
+bool        BLE::isConnectedToWiFi = false;
 
 /* PUBLIC METHOD */
 BLE::BLE()
@@ -112,50 +113,60 @@ void BLE::advertiseBeacon()
 
 void BLE::startWiFi()
 {
-    _wifi = new WiFiClass();
-
-    // WiFi.mode(WIFI_AP);
-    // WiFi.xPower(WIFI_POWER_MINUS_1dBm);
-    // WiFi.softAP(_SSID, _password);
-
     // WARNING: - The BLE off automatically when WIFI is on.
     // - WIFI can't be turned on while charging. (brownout detected)
-
-    Serial.printf("Free heap before WiFi: %u\n", ESP.getFreeHeap());
+    _wifi = new WiFiClass();
     _wifi->mode(WIFI_AP);
-    // _wifi->setTxPower(WIFI_POWER_MINUS_1dBm);
+    _setNetworkConfig();
+    _wifi->softAPConfig(localIP, gateway, subnet);
     _wifi->softAP(_SSID, _password);
-    // _wifi->setSleep(true);
-    Serial.printf("Free heap after WiFi: %u\n", ESP.getFreeHeap());
+    _wifi->onEvent(_WiFiAPConnectedCB, arduino_event_id_t::ARDUINO_EVENT_WIFI_AP_STACONNECTED);
+    _wifi->onEvent(_WiFiAPDisconnectedCB, arduino_event_id_t::ARDUINO_EVENT_WIFI_AP_STADISCONNECTED);
 
-    // WiFi.mode(WIFI_STA);
-    // WiFi.begin("POCO X5 5G", "gantengsekali");
-    // Serial.print("Connecting to WiFi...");
-    // while (WiFi.status() != WL_CONNECTED)
-    // {
-    //     Serial.print(".");
-    //     delay(100);
-    // }
-    //
-    // Serial.println("\n✅ Connected!");
-    // Serial.print("STA IP: ");
-    // Serial.println(WiFi.localIP());
-
-    Serial.printf("WiFi AP is Started! SSID: %s\n", _SSID);
+    Serial.printf("WiFi AP is Started! SSID: %s, IP: ", _SSID);
+    Serial.println(_wifi->softAPIP());
 }
 
-void BLE::startHTTPServer()
-{
-    _server = new WebServer(80);
-}
+// void BLE::startHTTPServer()
+// {
+//     _server = new WebServer(80);
+//
+//     _server->on("/", HTTP_GET, []() { server->send(200, "text/plain", "ESP32 OTA Server Running"); });
+//
+//     _server->begin();
+//     Serial.println("✅ HTTP Server Started!");
+// }
 
 /* PRIVATE METHOD */
 esp_err_t BLE::_updateFirmware()
 {
+    return ESP_OK;
 }
 
 time_t BLE::_calculateHMOffsetSeconds(time_t seconds, float offset)
 {
     time_t calculatedHM = static_cast<time_t>(round(seconds + (seconds * (offset / 100.0f))));
     return calculatedHM;
+}
+
+void BLE::_setNetworkConfig()
+{
+    localIP      = IPAddress(192, 168, 1, 100);
+    gateway      = IPAddress(192, 168, 1, 1);
+    subnet       = IPAddress(255, 255, 255, 0);
+    primaryDNS   = IPAddress(8, 8, 8, 8);
+    secondaryDNS = IPAddress(8, 8, 4, 4);
+}
+
+void BLE::_WiFiAPConnectedCB(arduino_event_id_t e)
+{
+    isConnectedToWiFi = true;
+
+    Serial.printf("A Device is Connected to ESP32 WiFi\n");
+}
+
+void BLE::_WiFiAPDisconnectedCB(arduino_event_id_t e)
+{
+    isConnectedToWiFi = false;
+    Serial.printf("A Device is disconnected from ESP32 WiFi\n");
 }

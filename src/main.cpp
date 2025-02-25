@@ -631,8 +631,10 @@ static void OTABLEUpdate(void *pvParam)
 
     while (1)
     {
-        if (ble->isConnected)
+        if (ble->isConnectedToWiFi)
         {
+            // if(ble->_server) server-
+
             vTaskDelay(pdMS_TO_TICKS(1000));
         }
         else
