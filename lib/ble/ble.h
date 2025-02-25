@@ -70,20 +70,26 @@ class OTAServerCallback : public NimBLEServerCallbacks
     void onConnect(NimBLEServer *pServer) override
     {
         Serial.println("Device is Connected to ESP32 BLE!");
-        // _bleInstance->isConnected = true;
 
         // start WiFi AP
         _bleInstance->startWiFi();
-
-        // Start HTTP Server
-        // _bleInstance->startHTTPServer();
     }
 
     void onDisconnect(NimBLEServer *pServer) override
     {
         Serial.println("Device is disconnected from ESP32 BLE!");
 
-        delete _bleInstance->_wifi;
+        if (_bleInstance->_wifi)
+        {
+            _bleInstance->_wifi->disconnect(true); // disconnect WiFi
+            delay(100);                            // Short delay to ensure proper shutdown
+
+            _bleInstance->_wifi->mode(WIFI_OFF); // Turn off WiFi
+            delay(100);                          // Short delay to ensure proper shutdown
+
+            delete _bleInstance->_wifi;
+            _bleInstance->_wifi = nullptr;
+        }
     }
 };
 
