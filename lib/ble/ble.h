@@ -41,12 +41,13 @@ class BLE
     void advertiseBeacon();
     void startServerOTA();
     void startHTTPServer();
+    void stopHTTPServer();
     void startWiFi();
     bool connectToWiFi();
 
-    static bool isConnectedToWiFi;
-    WiFiClass  *_wifi; // For WebServer
-    WebServer  *_server;
+    static bool     isConnectedToWiFi;
+    WiFiClass      *_wifi   = nullptr; // For WebServer
+    AsyncWebServer *_server = nullptr;
 
     // Set Static IP
     IPAddress localIP;

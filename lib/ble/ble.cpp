@@ -115,7 +115,8 @@ void BLE::startWiFi()
 {
     // WARNING: - The BLE off automatically when WIFI is on.
     // - WIFI can't be turned on while charging. (brownout detected)
-    _wifi = new WiFiClass();
+    if (!_wifi)
+        _wifi = new WiFiClass();
     _wifi->mode(WIFI_AP);
     _setNetworkConfig();
     _wifi->softAPConfig(localIP, gateway, subnet);
@@ -136,6 +137,24 @@ void BLE::startWiFi()
 //     _server->begin();
 //     Serial.println("✅ HTTP Server Started!");
 // }
+
+void BLE::startHTTPServer()
+{
+    if (!_server)
+        _server = new AsyncWebServer(80);
+
+    _server->on("/", HTTP_GET,
+                [](AsyncWebServerRequest *request) { request->send(200, "text/plain", "Hello from ESP32!"); });
+
+    _server->begin();
+    Serial.println("[HTTP] HTTP Server started!");
+}
+
+void BLE::stopHTTPServer()
+{
+    if (_server)
+        delete _server;
+}
 
 /* PRIVATE METHOD */
 esp_err_t BLE::_updateFirmware()

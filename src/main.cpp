@@ -633,12 +633,13 @@ static void OTABLEUpdate(void *pvParam)
     {
         if (ble->isConnectedToWiFi)
         {
-            // if(ble->_server) server-
-
+            // start server
+            ble->startHTTPServer();
             vTaskDelay(pdMS_TO_TICKS(1000));
         }
         else
         {
+            ble->stopHTTPServer();
             vTaskDelay(pdMS_TO_TICKS(500));
         }
         // do something
