@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 OTA Update</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin: 50px; }
+        #drop-area { border: 2px dashed #007bff; padding: 20px; width: 300px; margin: auto; }
+        .highlight { background: #e3f2fd; }
+        input[type="file"] { display: none; }
+        #status { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h2>ESP32 Firmware Update</h2>
+    <div id="drop-area">
+        <p>Drag & Drop Firmware Here</p>
+        <input type="file" id="fileElem">
+        <button onclick="document.getElementById('fileElem').click();">Select File</button>
+    </div>
+    <button id="uploadBtn">Upload</button>
+    <p id="status"></p>
+
+    <script>
+        let dropArea = document.getElementById("drop-area");
+        let fileElem = document.getElementById("fileElem");
+        let uploadBtn = document.getElementById("uploadBtn");
+        let status = document.getElementById("status");
+        let firmwareFile;
+
+        dropArea.addEventListener("dragover", (event) => { event.preventDefault(); dropArea.classList.add("highlight"); });
+        dropArea.addEventListener("dragleave", () => dropArea.classList.remove("highlight"));
+        dropArea.addEventListener("drop", (event) => {
+            event.preventDefault();
+            dropArea.classList.remove("highlight");
+            firmwareFile = event.dataTransfer.files[0];
+        });
+
+        fileElem.addEventListener("change", () => firmwareFile = fileElem.files[0]);
+
+        uploadBtn.addEventListener("click", () => {
+            if (!firmwareFile) return status.innerText = "No file selected!";
+            
+            let formData = new FormData();
+            formData.append("firmware", firmwareFile);
+
+            fetch("/upload", { method: "POST", body: formData })
+                .then(res => res.text())
+                .then(data => status.innerText = "Upload success! Restarting...")
+                .catch(err => status.innerText = "Upload failed!");
+        });
+    </script>
+</body>
+</html>
+

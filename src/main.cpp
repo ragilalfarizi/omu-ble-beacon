@@ -642,7 +642,6 @@ static void OTABLEUpdate(void *pvParam)
             ble->stopHTTPServer();
             vTaskDelay(pdMS_TO_TICKS(500));
         }
-        // do something
     }
 }
 

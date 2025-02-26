@@ -4,6 +4,7 @@
 #include "id_management.h"
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
+#include <LittleFS.h>
 #include <NimBLEDevice.h>
 #include <Update.h>
 #include <WiFi.h>
@@ -83,12 +84,12 @@ class OTAServerCallback : public NimBLEServerCallbacks
         if (_bleInstance->_wifi)
         {
             _bleInstance->_wifi->disconnect(true); // disconnect WiFi
-            delay(100);                            // Short delay to ensure proper shutdown
+            vTaskDelay(pdMS_TO_TICKS(500));
 
             _bleInstance->_wifi->mode(WIFI_OFF); // Turn off WiFi
-            delay(100);                          // Short delay to ensure proper shutdown
+            vTaskDelay(pdMS_TO_TICKS(500));
 
-            delete _bleInstance->_wifi;
+            // delete _bleInstance->_wifi;
             _bleInstance->_wifi = nullptr;
         }
     }

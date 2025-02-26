@@ -121,7 +121,7 @@ void BLE::startWiFi()
     _setNetworkConfig();
     _wifi->softAPConfig(localIP, gateway, subnet);
     _wifi->softAP(_SSID, _password);
-    _wifi->onEvent(_WiFiAPConnectedCB, arduino_event_id_t::ARDUINO_EVENT_WIFI_AP_STACONNECTED);
+    _wifi->onEvent(_WiFiAPConnectedCB, arduino_event_id_t::ARDUINO_EVENT_WIFI_AP_STAIPASSIGNED);
     _wifi->onEvent(_WiFiAPDisconnectedCB, arduino_event_id_t::ARDUINO_EVENT_WIFI_AP_STADISCONNECTED);
 
     Serial.printf("WiFi AP is Started! SSID: %s, IP: ", _SSID);
@@ -141,13 +141,19 @@ void BLE::startWiFi()
 void BLE::startHTTPServer()
 {
     if (!_server)
+    {
         _server = new AsyncWebServer(80);
+        Serial.println("[HTTP] HTTP Server started!");
+    }
 
     _server->on("/", HTTP_GET,
                 [](AsyncWebServerRequest *request) { request->send(200, "text/plain", "Hello from ESP32!"); });
 
+    // Serve the update page
+    _server->on("/update", HTTP_GET,
+                [](AsyncWebServerRequest *request) { request->send(LittleFS, "/update.html", "text/html"); });
+
     _server->begin();
-    Serial.println("[HTTP] HTTP Server started!");
 }
 
 void BLE::stopHTTPServer()
