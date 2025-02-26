@@ -18,7 +18,7 @@
 #include "pinDebug.h"
 #include "rtc.h"
 
-#define FIRMWARE_VERSION "v1.5.3-alpha-bugfix/optimize-response-HM"
+#define FIRMWARE_VERSION "v1.5.4-alpha-bugfix/optimize-response-HM"
 
 /* DEKLARASI OBJEK YANG DIGUNAKAN TERSIMPAN DI HEAP */
 RTC         *rtc;
@@ -431,10 +431,10 @@ static void countingHourMeter(void *pvParam)
                               startTime.hour(), startTime.minute(), startTime.second());
                 isCounting = true;
 
-                // WIP: add 10 di depan
-                // intervalTime = 10;
-                // data.hourMeter += intervalTime;
-                // hm->saveToStorage(data.hourMeter);
+                // NOTE: Add 10s upfront to normalize data
+                intervalTime = 10;
+                data.hourMeter += intervalTime;
+                hm->saveToStorage(data.hourMeter);
 
                 previousTime = startTime;
             }
