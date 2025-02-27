@@ -203,6 +203,19 @@ void BLE::stopHTTPServer()
         delete _server;
 }
 
+void BLE::stopAdvertiseOTA()
+{
+    if (_pAdvertisingOTA->isAdvertising())
+    {
+        _pAdvertisingOTA->stop();
+    }
+
+    // if (_pServer->)
+    // {
+    //     _pServer->disconnect(0);
+    // }
+}
+
 /* PRIVATE METHOD */
 esp_err_t BLE::_updateFirmware()
 {

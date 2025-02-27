@@ -37,15 +37,17 @@ class BLE
   public:
     BLE();
 
-    void begin();
-    void setCustomBeacon(BeaconData_t &data, Setting_t &setting);
-    void advertiseBeacon();
-    void startServerOTA();
-    void startHTTPServer();
-    void stopHTTPServer();
-    void startWiFi();
-    bool connectToWiFi();
+    void   begin();
+    void   setCustomBeacon(BeaconData_t &data, Setting_t &setting);
+    void   advertiseBeacon();
+    void   startServerOTA();
     void   startHTTPServer();
+    void   stopHTTPServer();
+    void   startWiFi();
+    bool   connectToWiFi();
+    String getMonitoringData(BeaconData_t &data, Setting_t &setting);
+    String getSettingData(Setting_t &setting);
+    void   stopAdvertiseOTA();
 
     static bool     isConnectedToWiFi;
     WiFiClass      *_wifi   = nullptr; // For WebServer
@@ -74,6 +76,12 @@ class OTAServerCallback : public NimBLEServerCallbacks
     {
         Serial.println("Device is Connected to ESP32 BLE!");
 
+        if (NimBLEDevice::getAdvertising()->isAdvertising())
+        {
+            NimBLEDevice::getAdvertising()->stop();
+            Serial.println("BLE advertising stopped.");
+        }
+
         // start WiFi AP
         _bleInstance->startWiFi();
     }
@@ -82,17 +90,20 @@ class OTAServerCallback : public NimBLEServerCallbacks
     {
         Serial.println("Device is disconnected from ESP32 BLE!");
 
-        if (_bleInstance->_wifi)
-        {
-            _bleInstance->_wifi->disconnect(true); // disconnect WiFi
-            vTaskDelay(pdMS_TO_TICKS(500));
+        NimBLEDevice::getAdvertising()->start();
+        Serial.println("BLE advertising restarted.");
 
-            _bleInstance->_wifi->mode(WIFI_OFF); // Turn off WiFi
-            vTaskDelay(pdMS_TO_TICKS(500));
-
-            // delete _bleInstance->_wifi;
-            _bleInstance->_wifi = nullptr;
-        }
+        // if (_bleInstance->_wifi)
+        // {
+        //     _bleInstance->_wifi->disconnect(true); // disconnect WiFi
+        //     vTaskDelay(pdMS_TO_TICKS(500));
+        //
+        //     _bleInstance->_wifi->mode(WIFI_OFF); // Turn off WiFi
+        //     vTaskDelay(pdMS_TO_TICKS(500));
+        //
+        //     // delete _bleInstance->_wifi;
+        //     _bleInstance->_wifi = nullptr;
+        // }
     }
 };
 
