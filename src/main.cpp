@@ -413,6 +413,8 @@ static void countingHourMeter(void *pvParam)
     bool     isCounting   = false; // Tracks if counting has started
     float    offsetValue  = 0;
     // time_t runTimeAccrued = 0;
+    time_t currentSeconds  = 0;
+    time_t previousSeconds = 0;
 
     while (1)
     {
@@ -440,26 +442,27 @@ static void countingHourMeter(void *pvParam)
             }
 
             currentTime = rtc->now();
-            // runTimeAccrued = static_cast<time_t>(currentTime.secondstime()) -
-            // static_cast<time_t>(startTime.secondstime());
+            vTaskDelay(pdMS_TO_TICKS(50));
+            currentSeconds = currentTime.secondstime();
+            vTaskDelay(pdMS_TO_TICKS(50));
+            previousSeconds = previousTime.secondstime();
 
-            intervalRaw = (int8_t)(currentTime.secondstime() - previousTime.secondstime());
+            intervalRaw = static_cast<int8_t>(currentSeconds - previousSeconds);
             if (intervalRaw > 11 || intervalRaw < 0)
             {
-                Serial.printf("[ERROR] GLITCH IS FOUND! Counter : %d\n", glitchCounter);
-                glitchCounter += 1;
+                // Serial.printf("[ERROR] GLITCH IS FOUND! Counter : %d\n", glitchCounter);
+                // glitchCounter += 1;
                 intervalTime = 10;
             }
             else
             {
-                intervalTime = (time_t)abs(intervalRaw);
+                intervalTime = static_cast<time_t>(abs(intervalRaw));
             }
 
             // NOTE: UNCOMMENT TO DEBUG
 
             Serial.printf("============================================\n");
-            Serial.printf("[DEBUG] current - start = %d - %d = %d \n", currentTime.secondstime(),
-                          startTime.secondstime(), intervalRaw);
+            Serial.printf("[DEBUG] current - start = %d - %d = %d \n", currentSeconds, previousSeconds, intervalRaw);
             Serial.printf("============================================\n");
 
             data.hourMeter += intervalTime;
