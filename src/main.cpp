@@ -36,6 +36,7 @@ static bool   updateConfigFromUART(Setting_t &setting, const String &input);
 static void   printFirmwareVersion();
 static float  calculateHMOffset(time_t seconds, float offset);
 static time_t calculateHMOffsetSeconds(time_t seconds, float offset);
+static void   wifiTimeoutCallback(TimerHandle_t xTimer);
 
 /* FORWARD DECLARATION UNTUK HANDLER DAN SEMAPHORE RTOS */
 TaskHandle_t      dataAcquisitionHandler = NULL;
@@ -627,21 +628,52 @@ static void checkDeepSleepTask(void *param)
 
 static void OTABLEUpdate(void *pvParam)
 {
+    TimerHandle_t wifiTimer;
+    wifiTimer = xTimerCreate("WiFi Timeout", pdMS_TO_TICKS(OTA_WIFI_DURATION), pdFALSE, NULL, wifiTimeoutCallback);
+
     ble->startServerOTA();
+
+    BLE::OTAState state        = BLE::IDLE;
+    bool          wasConnected = false; // Track previous connection state
 
     while (1)
     {
-        if (ble->isConnectedToWiFi)
+        switch (state)
         {
-            // start server
-            ble->startHTTPServer();
-            vTaskDelay(pdMS_TO_TICKS(1000));
+        case BLE::IDLE:
+            if (ble->isConnectedToWiFi)
+            {
+                Serial.println("Switching to OTA ON state...");
+                // ble->stopAdvertiseOTA();
+                ble->startHTTPServer();
+
+                if (xTimerIsTimerActive(wifiTimer) == pdFALSE)
+                {
+                    xTimerStart(wifiTimer, 0);
+                }
+
+                state = BLE::OTA_ON;
+            }
+            break;
+
+        case BLE::OTA_ON:
+            if (!ble->isConnectedToWiFi || xTimerIsTimerActive(wifiTimer) == pdFALSE)
+            {
+                Serial.println("Switching to IDLE state...");
+                // ble->startAdvertiseOTA();
+                ble->stopHTTPServer();
+
+                if (xTimerIsTimerActive(wifiTimer) == pdTRUE)
+                {
+                    xTimerStop(wifiTimer, 0);
+                }
+
+                state = BLE::IDLE;
+            }
+            break;
         }
-        else
-        {
-            ble->stopHTTPServer();
-            vTaskDelay(pdMS_TO_TICKS(500));
-        }
+
+        vTaskDelay(pdMS_TO_TICKS(500)); // Prevent busy looping
     }
 }
 
@@ -671,4 +703,22 @@ static time_t calculateHMOffsetSeconds(time_t seconds, float offset)
 {
     time_t calculatedHM = static_cast<time_t>(round(seconds + (seconds * (offset / 100.0f))));
     return calculatedHM;
+}
+
+static void wifiTimeoutCallback(TimerHandle_t xTimer)
+{
+    // Access the global instance of BLE
+    if (ble->_wifi)
+    {
+        Serial.println("WiFi is about to shutdown..");
+        ble->_wifi->disconnect(true); // disconnect WiFi
+        // vTaskDelay(pdMS_TO_TICKS(500));
+
+        ble->_wifi->mode(WIFI_OFF); // Turn off WiFi
+        // vTaskDelay(pdMS_TO_TICKS(500));
+
+        Serial.println("WiFi is shutting down..");
+        delete ble->_wifi;
+        ble->_wifi = nullptr;
+    }
 }

@@ -12,6 +12,7 @@
 
 #define SERVICE_UUID        "6f7e9280-e3d8-47b7-9733-ef0ffffc65fd"
 #define CHARACTERISTIC_UUID "2233b614-a358-4551-8ad1-b113764c68f3"
+#define OTA_WIFI_DURATION   (2 * 60 * 1000) // 2 minutes
 
 class BLE
 {
@@ -36,6 +37,12 @@ class BLE
 
   public:
     BLE();
+
+    enum OTAState
+    {
+        IDLE = 0,
+        OTA_ON
+    };
 
     void   begin();
     void   setCustomBeacon(BeaconData_t &data, Setting_t &setting);
