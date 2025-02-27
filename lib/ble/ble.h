@@ -45,6 +45,7 @@ class BLE
     void stopHTTPServer();
     void startWiFi();
     bool connectToWiFi();
+    void   startHTTPServer();
 
     static bool     isConnectedToWiFi;
     WiFiClass      *_wifi   = nullptr; // For WebServer

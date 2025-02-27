@@ -153,6 +153,47 @@ void BLE::startHTTPServer()
     _server->on("/update", HTTP_GET,
                 [](AsyncWebServerRequest *request) { request->send(LittleFS, "/update.html", "text/html"); });
 
+    _server->on(
+        "/update", HTTP_POST,
+        [this](AsyncWebServerRequest *request) {
+            Serial.println("Firmware update request received.");
+            request->send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
+        },
+        [this](AsyncWebServerRequest *request, const String &filename, size_t index, uint8_t *data, size_t len,
+               bool final) {
+            if (index == 0)
+            {
+                Serial.printf("Update: %s\n", filename.c_str());
+                if (!Update.begin(UPDATE_SIZE_UNKNOWN))
+                {
+                    Update.printError(Serial);
+                }
+            }
+
+            if (!Update.hasError())
+            {
+                if (Update.write(data, len) != len)
+                {
+                    Update.printError(Serial);
+                }
+            }
+
+            if (final)
+            {
+                if (Update.end(true))
+                {
+                    Serial.printf("Update Success: %u bytes\nRebooting...\n", index + len);
+                    Serial.flush(); // Ensure logs are printed before restart
+                    delay(100);     // Small delay for stability
+                    ESP.restart();  // Restart only after update completes
+                }
+                else
+                {
+                    Update.printError(Serial);
+                }
+            }
+        });
+
     _server->begin();
 }
 
