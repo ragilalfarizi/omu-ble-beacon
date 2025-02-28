@@ -1,8 +1,10 @@
 #include "ble.h"
 
-const char *BLE::_SSID             = "ESP32-WIFI-RAGIL";
-const char *BLE::_password         = "1234567890";
-bool        BLE::isConnectedToWiFi = false;
+const char         *BLE::_SSID             = "ESP32-WIFI-RAGIL";
+const char         *BLE::_password         = "1234567890";
+bool                BLE::isConnectedToWiFi = false;
+extern BeaconData_t data;
+extern Setting_t    setting;
 
 /* PUBLIC METHOD */
 BLE::BLE()
@@ -146,8 +148,11 @@ void BLE::startHTTPServer()
         Serial.println("[HTTP] HTTP Server started!");
     }
 
+    /* "/" -> simple  Hello World */
     _server->on("/", HTTP_GET,
                 [](AsyncWebServerRequest *request) { request->send(200, "text/plain", "Hello from ESP32!"); });
+
+    _server->on("/data", HTTP_GET, _handleSerializingDataJSON);
 
     // Serve the update page
     _server->on("/update", HTTP_GET,
@@ -252,4 +257,25 @@ void BLE::_WiFiAPDisconnectedCB(arduino_event_id_t e)
 {
     isConnectedToWiFi = false;
     Serial.printf("A Device is disconnected from ESP32 WiFi\n");
+}
+
+void BLE::_handleSerializingDataJSON(AsyncWebServerRequest *request)
+{
+    JsonDocument _DataDoc;
+
+    _DataDoc["data"]["gps"]["longitude"] = data.gps.longitude;
+    _DataDoc["data"]["gps"]["latitude"]  = data.gps.latitude;
+    _DataDoc["data"]["gps"]["status"]    = static_cast<String>(data.gps.status);
+    _DataDoc["data"]["voltageSupply"]    = data.voltageSupply;
+    _DataDoc["data"]["hourMeter"]        = data.hourMeter;
+
+    _DataDoc["setting"]["ID"]                = setting.ID;
+    _DataDoc["setting"]["thresholdHM"]       = setting.thresholdHM;
+    _DataDoc["setting"]["offsetAnalogInput"] = setting.offsetAnalogInput;
+    _DataDoc["setting"]["offsetHM"]          = setting.offsetHM;
+
+    String response;
+    serializeJson(_DataDoc, response);
+
+    request->send(200, "application/json", response);
 }

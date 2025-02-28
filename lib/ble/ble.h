@@ -3,6 +3,7 @@
 #include "common.h"
 #include "id_management.h"
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <ESPAsyncWebServer.h>
 #include <LittleFS.h>
 #include <NimBLEDevice.h>
@@ -12,7 +13,10 @@
 
 #define SERVICE_UUID        "6f7e9280-e3d8-47b7-9733-ef0ffffc65fd"
 #define CHARACTERISTIC_UUID "2233b614-a358-4551-8ad1-b113764c68f3"
-#define OTA_WIFI_DURATION   (2 * 60 * 1000) // 2 minutes
+#define OTA_WIFI_DURATION   (60 * 60 * 1000) // 2 minutes
+
+extern BeaconData_t data;
+extern Setting_t    setting;
 
 class BLE
 {
@@ -34,6 +38,7 @@ class BLE
     void        _setNetworkConfig();
     static void _WiFiAPConnectedCB(arduino_event_id_t e);
     static void _WiFiAPDisconnectedCB(arduino_event_id_t e);
+    static void _handleSerializingDataJSON(AsyncWebServerRequest *request);
 
   public:
     BLE();
