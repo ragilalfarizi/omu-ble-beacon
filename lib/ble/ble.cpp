@@ -200,7 +200,11 @@ void BLE::startHTTPServer()
 void BLE::stopHTTPServer()
 {
     if (_server)
+    {
+        _server->end();
         delete _server;
+        _server = nullptr;
+    }
 }
 
 void BLE::stopAdvertiseOTA()
