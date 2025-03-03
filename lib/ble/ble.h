@@ -4,6 +4,7 @@
 #include "id_management.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <AsyncJson.h>
 #include <ESPAsyncWebServer.h>
 #include <LittleFS.h>
 #include <NimBLEDevice.h>

@@ -115,8 +115,6 @@ void BLE::advertiseBeacon()
 
 void BLE::startWiFi()
 {
-    // WARNING: - The BLE off automatically when WIFI is on.
-    // - WIFI can't be turned on while charging. (brownout detected)
     if (!_wifi)
         _wifi = new WiFiClass();
     _wifi->mode(WIFI_AP);
@@ -129,16 +127,6 @@ void BLE::startWiFi()
     Serial.printf("WiFi AP is Started! SSID: %s, IP: ", _SSID);
     Serial.println(_wifi->softAPIP());
 }
-
-// void BLE::startHTTPServer()
-// {
-//     _server = new WebServer(80);
-//
-//     _server->on("/", HTTP_GET, []() { server->send(200, "text/plain", "ESP32 OTA Server Running"); });
-//
-//     _server->begin();
-//     Serial.println("✅ HTTP Server Started!");
-// }
 
 void BLE::startHTTPServer()
 {
@@ -153,6 +141,56 @@ void BLE::startHTTPServer()
                 [](AsyncWebServerRequest *request) { request->send(200, "text/plain", "Hello from ESP32!"); });
 
     _server->on("/data", HTTP_GET, _handleSerializingDataJSON);
+
+    // Add JSON handler for /setting endpoint
+    AsyncCallbackJsonWebHandler *handler =
+        new AsyncCallbackJsonWebHandler("/setting", [](AsyncWebServerRequest *request, JsonVariant &json) {
+            JsonObject jsonObj = json.as<JsonObject>();
+
+            if (jsonObj.isNull())
+            {
+                request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                return;
+            }
+
+            // prints the json
+            serializeJson(jsonObj, Serial);
+            Serial.println();
+
+            if (jsonObj["ID"].is<String>())
+            {
+                Serial.print("ok ");
+                setting.ID = jsonObj["ID"].as<String>();
+            }
+
+            if (jsonObj["voltageThreshold"].is<float>())
+            {
+                Serial.print("ok ");
+                setting.thresholdHM = jsonObj["voltageThreshold"].as<float>();
+            }
+
+            if (jsonObj["offsetAnalogInput"].is<float>())
+            {
+                Serial.print("ok ");
+                setting.offsetAnalogInput = jsonObj["offsetAnalogInput"].as<float>();
+            }
+
+            if (jsonObj["hourMeter"].is<float>() || jsonObj["hourMeter"].is<int>())
+            {
+                Serial.print("ok ");
+                data.hourMeter = jsonObj["hourMeter"].as<float>();
+            }
+
+            if (jsonObj["offsetHourMeter"].is<float>())
+            {
+                Serial.print("ok ");
+                setting.offsetHM = jsonObj["offsetHourMeter"].as<float>();
+            }
+
+            request->send(200, "application/json", "{\"status\":\"success\"}");
+        });
+
+    _server->addHandler(handler); // Attach JSON handler to server
 
     // Serve the update page
     _server->on("/update", HTTP_GET,
