@@ -145,6 +145,7 @@ void BLE::startHTTPServer()
     _server->on("/", HTTP_GET,
                 [](AsyncWebServerRequest *request) { request->send(200, "text/plain", "Hello from ESP32!"); });
 
+    /* "/data" -> for retreive data */
     _server->on("/data", HTTP_GET, _handleSerializingDataJSON);
 
     // Add JSON handler for /setting endpoint
@@ -191,6 +192,9 @@ void BLE::startHTTPServer()
                 Serial.print("ok ");
                 setting.offsetHM = jsonObj["offsetHourMeter"].as<float>();
             }
+
+            hm->saveSettings(setting);
+            hm->saveToStorage(data.hourMeter);
 
             request->send(200, "application/json", "{\"status\":\"success\"}");
         });

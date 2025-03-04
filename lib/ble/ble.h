@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common.h"
+#include "hour_meter_manager.h"
 #include "id_management.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -18,6 +19,7 @@
 
 extern BeaconData_t data;
 extern Setting_t    setting;
+extern HourMeter   *hm;
 
 class BLE
 {
