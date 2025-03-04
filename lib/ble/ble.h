@@ -111,17 +111,18 @@ class OTAServerCallback : public NimBLEServerCallbacks
         NimBLEDevice::getAdvertising()->start();
         Serial.println("BLE advertising restarted.");
 
-        // if (_bleInstance->_wifi)
-        // {
-        //     _bleInstance->_wifi->disconnect(true); // disconnect WiFi
-        //     vTaskDelay(pdMS_TO_TICKS(500));
-        //
-        //     _bleInstance->_wifi->mode(WIFI_OFF); // Turn off WiFi
-        //     vTaskDelay(pdMS_TO_TICKS(500));
-        //
-        //     // delete _bleInstance->_wifi;
-        //     _bleInstance->_wifi = nullptr;
-        // }
+        if (_bleInstance->_wifi)
+        {
+            _bleInstance->_wifi->disconnect(true); // disconnect WiFi
+            vTaskDelay(pdMS_TO_TICKS(500));
+
+            _bleInstance->_wifi->mode(WIFI_OFF); // Turn off WiFi
+            vTaskDelay(pdMS_TO_TICKS(500));
+
+            delete _bleInstance->_wifi;
+            vTaskDelay(pdMS_TO_TICKS(100));
+            _bleInstance->_wifi = nullptr;
+        }
     }
 };
 
