@@ -22,8 +22,10 @@ extern Setting_t    setting;
 class BLE
 {
   private:
-    static const char *_SSID;
-    static const char *_password;
+    String      _WIFI_SSID;
+    const char *_WIFIpwd;
+
+    String _BT_SSID;
 
     // For Beacon
     BLEAdvertising *_pAdvertising;
@@ -61,6 +63,7 @@ class BLE
     String getMonitoringData(BeaconData_t &data, Setting_t &setting);
     String getSettingData(Setting_t &setting);
     void   stopAdvertiseOTA();
+    void   setWiFiSSID(String newSSID);
 
     static bool     isConnectedToWiFi;
     WiFiClass      *_wifi   = nullptr; // For WebServer

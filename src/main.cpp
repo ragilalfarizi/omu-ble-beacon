@@ -106,11 +106,6 @@ void setup()
     dataReadySemaphore = xSemaphoreCreateBinary();
     xSemaphoreGive(dataReadySemaphore);
 
-    /* BLE INIT */
-    ble = new BLE();
-    ble->begin();
-    Serial.println("[BLE] Inisialisasi BLE");
-
     /* HOUR METER INIT */
     hm             = new HourMeter();
     data.hourMeter = hm->loadHMFromStorage();
@@ -125,6 +120,11 @@ void setup()
     Serial.printf("[setting] offsetAnalogInput\t: %f\n", setting.offsetAnalogInput);
     Serial.printf("[setting] offsetHM \t\t: %.2f %%\n", setting.offsetHM);
     scaleAdjusted = setting.offsetAnalogInput;
+
+    /* BLE INIT */
+    ble = new BLE();
+    ble->begin();
+    Serial.println("[BLE] Inisialisasi BLE");
 
     /* ENABLING ESP32 DEEP SLEEP BY TIMER */
     esp_sleep_enable_ext0_wakeup(GPIO_NUM_35, 0); // 1 = High, 0 = Low

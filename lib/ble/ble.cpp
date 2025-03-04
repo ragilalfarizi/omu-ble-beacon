@@ -1,7 +1,5 @@
 #include "ble.h"
 
-const char         *BLE::_SSID             = "ESP32-WIFI-RAGIL";
-const char         *BLE::_password         = "1234567890";
 bool                BLE::isConnectedToWiFi = false;
 extern BeaconData_t data;
 extern Setting_t    setting;
@@ -9,11 +7,18 @@ extern Setting_t    setting;
 /* PUBLIC METHOD */
 BLE::BLE()
 {
+    _WIFI_SSID = "WIFI_" + setting.ID; // name + wifi
+    _WIFIpwd   = "1234567890";
+
+    _BT_SSID = "BT_" + setting.ID;
+
+    Serial.println(_WIFI_SSID);
+    Serial.println(_BT_SSID);
 }
 
 void BLE::begin()
 {
-    BLEDevice::init("");
+    BLEDevice::init(_BT_SSID.c_str());
     BLEDevice::setPower(ESP_PWR_LVL_N12);
     _pAdvertising = BLEDevice::getAdvertising();
 }
@@ -103,7 +108,7 @@ void BLE::setCustomBeacon(BeaconData_t &data, Setting_t &setting)
     beacon_data[18] = (offsettedSecondsHM & 0xFF);                //
 
     oScanResponseData.setServiceData(BLEUUID(beaconUUID), std::string(beacon_data, sizeof(beacon_data)));
-    oAdvertisementData.setName(setting.ID.c_str());
+    oAdvertisementData.setName(_BT_SSID.c_str());
     _pAdvertising->setAdvertisementData(oAdvertisementData);
     _pAdvertising->setScanResponseData(oScanResponseData);
 }
@@ -120,11 +125,11 @@ void BLE::startWiFi()
     _wifi->mode(WIFI_AP);
     _setNetworkConfig();
     _wifi->softAPConfig(localIP, gateway, subnet);
-    _wifi->softAP(_SSID, _password);
+    _wifi->softAP(_WIFI_SSID.c_str(), _WIFIpwd);
     _wifi->onEvent(_WiFiAPConnectedCB, arduino_event_id_t::ARDUINO_EVENT_WIFI_AP_STAIPASSIGNED);
     _wifi->onEvent(_WiFiAPDisconnectedCB, arduino_event_id_t::ARDUINO_EVENT_WIFI_AP_STADISCONNECTED);
 
-    Serial.printf("WiFi AP is Started! SSID: %s, IP: ", _SSID);
+    Serial.printf("WiFi AP is Started! SSID: %s, IP: ", _WIFI_SSID);
     Serial.println(_wifi->softAPIP());
 }
 
@@ -261,6 +266,11 @@ void BLE::stopAdvertiseOTA()
     // {
     //     _pServer->disconnect(0);
     // }
+}
+
+void BLE::setWiFiSSID(String newSSID)
+{
+    _WIFI_SSID = newSSID;
 }
 
 /* PRIVATE METHOD */
