@@ -216,11 +216,6 @@ void BLE::startHTTPServer()
     _server->addHandler(handler); // Attach JSON handler to server
 
     // Serve the update page
-    // WARN: consider deleting this endpoint since it's not really needed anymore.
-    //         also delete the .html web pages in filesystem.
-    _server->on("/update", HTTP_GET,
-                [](AsyncWebServerRequest *request) { request->send(LittleFS, "/update.html", "text/html"); });
-
     _server->on(
         "/update", HTTP_POST,
         [this](AsyncWebServerRequest *request) {
