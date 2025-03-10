@@ -37,6 +37,8 @@ class BLE
     NimBLEService        *_pService;
     NimBLECharacteristic *_pCharacteristic;
     NimBLEAdvertising    *_pAdvertisingOTA;
+    bool                  _isOTASuccess = false;
+    bool                  _isFileBin    = false;
 
     esp_err_t   _updateFirmware();
     time_t      _calculateHMOffsetSeconds(time_t seconds, float offset);
@@ -54,18 +56,19 @@ class BLE
         OTA_ON
     };
 
-    void   begin();
-    void   setCustomBeacon(BeaconData_t &data, Setting_t &setting);
-    void   advertiseBeacon();
-    void   startServerOTA();
-    void   startHTTPServer();
-    void   stopHTTPServer();
-    void   startWiFi();
-    bool   connectToWiFi();
-    String getMonitoringData(BeaconData_t &data, Setting_t &setting);
-    String getSettingData(Setting_t &setting);
-    void   stopAdvertiseOTA();
-    void   setWiFiSSID(String newSSID);
+    void        begin();
+    void        setCustomBeacon(BeaconData_t &data, Setting_t &setting);
+    void        advertiseBeacon();
+    void        startServerOTA();
+    void        startHTTPServer();
+    void        stopHTTPServer();
+    void        startWiFi();
+    bool        connectToWiFi();
+    String      getMonitoringData(BeaconData_t &data, Setting_t &setting);
+    String      getSettingData(Setting_t &setting);
+    void        stopAdvertiseOTA();
+    void        setWiFiSSID(String newSSID);
+    static void restartTask(void *param);
 
     static bool     isConnectedToWiFi;
     WiFiClass      *_wifi   = nullptr; // For WebServer

@@ -129,7 +129,7 @@ void BLE::startWiFi()
     _wifi->onEvent(_WiFiAPConnectedCB, arduino_event_id_t::ARDUINO_EVENT_WIFI_AP_STAIPASSIGNED);
     _wifi->onEvent(_WiFiAPDisconnectedCB, arduino_event_id_t::ARDUINO_EVENT_WIFI_AP_STADISCONNECTED);
 
-    Serial.printf("WiFi AP is Started! SSID: %s, IP: ", _WIFI_SSID);
+    Serial.printf("WiFi AP is Started! SSID: %s, IP: ", _WIFI_SSID.c_str());
     Serial.println(_wifi->softAPIP());
 }
 
@@ -155,7 +155,13 @@ void BLE::startHTTPServer()
 
             if (jsonObj.isNull())
             {
-                request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                JsonDocument errorResponse;
+                errorResponse["success"] = false;
+                errorResponse["message"] = "Invalid JSON";
+
+                String response;
+                serializeJson(errorResponse, response);
+                request->send(400, "application/json", response);
                 return;
             }
 
@@ -196,53 +202,89 @@ void BLE::startHTTPServer()
             hm->saveSettings(setting);
             hm->saveToStorage(data.hourMeter);
 
-            request->send(200, "application/json", "{\"status\":\"success\"}");
+            // Create the success response
+            JsonDocument responseDoc;
+            responseDoc["success"] = true;
+            responseDoc["message"] = "Setting updated successfully";
+            responseDoc["data"]    = JsonObject(); // Empty data object if nothing needs to be returned
+
+            String response;
+            serializeJson(responseDoc, response);
+            request->send(200, "application/json", response);
         });
 
     _server->addHandler(handler); // Attach JSON handler to server
 
     // Serve the update page
+    // WARN: consider deleting this endpoint since it's not really needed anymore.
+    //         also delete the .html web pages in filesystem.
     _server->on("/update", HTTP_GET,
                 [](AsyncWebServerRequest *request) { request->send(LittleFS, "/update.html", "text/html"); });
 
     _server->on(
         "/update", HTTP_POST,
         [this](AsyncWebServerRequest *request) {
-            Serial.println("Firmware update request received.");
-            request->send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
-        },
-        [this](AsyncWebServerRequest *request, const String &filename, size_t index, uint8_t *data, size_t len,
-               bool final) {
-            if (index == 0)
-            {
-                Serial.printf("Update: %s\n", filename.c_str());
-                if (!Update.begin(UPDATE_SIZE_UNKNOWN))
-                {
-                    Update.printError(Serial);
-                }
-            }
-
-            if (!Update.hasError())
-            {
-                if (Update.write(data, len) != len)
-                {
-                    Update.printError(Serial);
-                }
-            }
-
-            if (final)
+            // Parameter 3 (Triggered After Upload Completes)
+            if (_isFileBin)
             {
                 if (Update.end(true))
                 {
-                    Serial.printf("Update Success: %u bytes\nRebooting...\n", index + len);
-                    Serial.flush(); // Ensure logs are printed before restart
-                    delay(100);     // Small delay for stability
-                    ESP.restart();  // Restart only after update completes
+                    _isOTASuccess = true;
+                    request->send(
+                        200, "application/json",
+                        R"({"success": true, "message": "OTA update successful. Restarting...", "data": {}})");
+
+                    Serial.println("OTA update successful, restarting in 3 seconds...");
+
+                    // Instead of blocking, create a new FreeRTOS task for restart
+                    xTaskCreate(restartTask, "RestartTask", 2048, NULL, 1, NULL);
                 }
                 else
                 {
-                    Update.printError(Serial);
+                    request->send(500, "application/json",
+                                  R"({"success": false, "message": "OTA update failed.", "data": {}})");
                 }
+            }
+            else
+            {
+                request->send(400, "application/json",
+                              R"({"success": false, "message": "No binary file received.", "data": {}})");
+            }
+        },
+        [this](AsyncWebServerRequest *request, const String &filename, size_t index, uint8_t *data, size_t len,
+               bool final) {
+            // Parameter 4 (File Upload Handling)
+            if (!index)
+            { // First chunk of file
+                Serial.printf("OTA Update Start: %s\n", filename.c_str());
+
+                // check if filename has .bin extension
+                if (!filename.endsWith(".bin"))
+                {
+                    Serial.println("Rejected: Invalid file type!");
+                    _isFileBin = false;
+                    return;
+                }
+                if (!Update.begin(UPDATE_SIZE_UNKNOWN))
+                {
+                    request->send(500, "application/json",
+                                  R"({"success": false, "message": "OTA begin failed.", "data": {}})");
+                    return;
+                }
+            }
+
+            // Write the file chunk
+            if (Update.write(data, len) != len)
+            {
+                request->send(500, "application/json",
+                              R"({"success": false, "message": "OTA write failed.", "data": {}})");
+                return;
+            }
+
+            if (final)
+            { // Last chunk received
+                Serial.println("OTA Update Completed.");
+                _isFileBin = true; // Mark that the file was received
             }
         });
 
@@ -275,6 +317,12 @@ void BLE::stopAdvertiseOTA()
 void BLE::setWiFiSSID(String newSSID)
 {
     _WIFI_SSID = newSSID;
+}
+
+void BLE::restartTask(void *param)
+{
+    vTaskDelay(pdMS_TO_TICKS(3000)); // Give enough time for the response to send
+    ESP.restart();
 }
 
 /* PRIVATE METHOD */
@@ -313,21 +361,45 @@ void BLE::_WiFiAPDisconnectedCB(arduino_event_id_t e)
 
 void BLE::_handleSerializingDataJSON(AsyncWebServerRequest *request)
 {
-    JsonDocument _DataDoc;
+    JsonDocument _ResponseDoc; // Response wrapper
+    JsonDocument _DataDoc;     // Data JSON structure
 
-    _DataDoc["data"]["gps"]["longitude"] = data.gps.longitude;
-    _DataDoc["data"]["gps"]["latitude"]  = data.gps.latitude;
-    _DataDoc["data"]["gps"]["status"]    = static_cast<String>(data.gps.status);
-    _DataDoc["data"]["voltageSupply"]    = data.voltageSupply;
-    _DataDoc["data"]["hourMeter"]        = data.hourMeter;
+    // Try populating the JSON object
+    try
+    {
+        _DataDoc["data"]["gps"]["longitude"] = data.gps.longitude;
+        _DataDoc["data"]["gps"]["latitude"]  = data.gps.latitude;
+        _DataDoc["data"]["gps"]["status"]    = static_cast<String>(data.gps.status);
 
-    _DataDoc["setting"]["ID"]                = setting.ID;
-    _DataDoc["setting"]["thresholdHM"]       = setting.thresholdHM;
-    _DataDoc["setting"]["offsetAnalogInput"] = setting.offsetAnalogInput;
-    _DataDoc["setting"]["offsetHM"]          = setting.offsetHM;
+        _DataDoc["data"]["voltageSupply"] = data.voltageSupply;
+        _DataDoc["data"]["hourMeter"]     = data.hourMeter;
 
+        _DataDoc["setting"]["ID"]                = setting.ID;
+        _DataDoc["setting"]["thresholdHM"]       = setting.thresholdHM;
+        _DataDoc["setting"]["offsetAnalogInput"] = setting.offsetAnalogInput;
+        _DataDoc["setting"]["offsetHM"]          = setting.offsetHM;
+
+        // Wrap inside success response
+        _ResponseDoc["success"] = true;
+        _ResponseDoc["message"] = "Data retrieved successfully";
+        _ResponseDoc["data"]    = _DataDoc;
+    }
+    catch (...)
+    { // Catch unexpected errors
+        Serial.println("Error: Failed to generate JSON response");
+
+        JsonDocument _ErrorDoc;
+        _ErrorDoc["success"] = false;
+        _ErrorDoc["message"] = "Failed to process data";
+
+        String errorResponse;
+        serializeJson(_ErrorDoc, errorResponse);
+        request->send(400, "application/json", errorResponse);
+        return;
+    }
+
+    // Serialize the final response and send it
     String response;
-    serializeJson(_DataDoc, response);
-
+    serializeJson(_ResponseDoc, response);
     request->send(200, "application/json", response);
 }
