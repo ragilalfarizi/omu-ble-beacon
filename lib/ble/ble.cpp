@@ -206,7 +206,7 @@ void BLE::startHTTPServer()
             JsonDocument responseDoc;
             responseDoc["success"] = true;
             responseDoc["message"] = "Setting updated successfully";
-            responseDoc["data"]    = JsonObject(); // Empty data object if nothing needs to be returned
+            responseDoc["data"]    = jsonObj; // Empty data object if nothing needs to be returned
 
             String response;
             serializeJson(responseDoc, response);
