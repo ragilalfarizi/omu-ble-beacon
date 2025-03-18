@@ -362,12 +362,12 @@ void BLE::_handleSerializingDataJSON(AsyncWebServerRequest *request)
     // Try populating the JSON object
     try
     {
-        _DataDoc["data"]["gps"]["longitude"] = data.gps.longitude;
-        _DataDoc["data"]["gps"]["latitude"]  = data.gps.latitude;
-        _DataDoc["data"]["gps"]["status"]    = static_cast<String>(data.gps.status);
+        _DataDoc["gps"]["longitude"] = data.gps.longitude;
+        _DataDoc["gps"]["latitude"]  = data.gps.latitude;
+        _DataDoc["gps"]["status"]    = static_cast<String>(data.gps.status);
 
-        _DataDoc["data"]["voltageSupply"] = data.voltageSupply;
-        _DataDoc["data"]["hourMeter"]     = data.hourMeter;
+        _DataDoc["voltageSupply"] = data.voltageSupply;
+        _DataDoc["hourMeter"]     = data.hourMeter;
 
         _DataDoc["setting"]["ID"]                = setting.ID;
         _DataDoc["setting"]["thresholdHM"]       = setting.thresholdHM;
