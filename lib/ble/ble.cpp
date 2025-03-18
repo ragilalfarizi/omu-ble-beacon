@@ -29,20 +29,30 @@ void BLE::startServerOTA()
     _pServer = NimBLEDevice::createServer();
     _pServer->setCallbacks(new OTAServerCallback(this));
 
+    // NOTE: Creating basic information service
+    _pDISService = _pServer->createService(SERVICE_DIS_UUID);
+
+    // Add Firmware Revision Characteristic (Read-only)
+    _pFirmwareChar = _pDISService->createCharacteristic(CHAR_DIS_FW_VER_UUID, NIMBLE_PROPERTY::READ);
+    _pFirmwareChar->setValue(FIRMWARE_VERSION); // Example firmware version
+
+    _pDISService->start();
+
     // create service
-    _pService = _pServer->createService(SERVICE_UUID);
+    _pOTAService = _pServer->createService(SERVICE_OTA_UUID);
 
     // create characteristic
     _pCharacteristic =
-        _pService->createCharacteristic(CHARACTERISTIC_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
+        _pOTAService->createCharacteristic(CHAR_OTA_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
     _pCharacteristic->setCallbacks(new OTACharacteristicCallback());
 
     // start the service
-    _pService->start();
+    _pOTAService->start();
 
     // Start Advertising
     _pAdvertisingOTA = NimBLEDevice::getAdvertising();
-    _pAdvertisingOTA->addServiceUUID(SERVICE_UUID);
+    _pAdvertisingOTA->addServiceUUID(SERVICE_OTA_UUID);
+    _pAdvertisingOTA->addServiceUUID(SERVICE_DIS_UUID);
     _pAdvertisingOTA->start();
 }
 

@@ -2,8 +2,9 @@
 
 #include <Arduino.h>
 
-#define PIN_RX_RS485 18
-#define PIN_TX_RS485 19
+#define PIN_RX_RS485     18
+#define PIN_TX_RS485     19
+#define FIRMWARE_VERSION "v1.6.0-beta-feature/ble-ota"
 
 #define STALL_TOLERANCE_MS 5000 // 5 seconds tolerance
 

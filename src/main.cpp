@@ -14,8 +14,6 @@
 #include "id_management.h"
 #include "rtc.h"
 
-#define FIRMWARE_VERSION "v1.6.0-alpha-feature/ble-ota"
-
 /* DEKLARASI OBJEK YANG DIGUNAKAN TERSIMPAN DI HEAP */
 RTC         *rtc;
 AnalogInput *ain;
