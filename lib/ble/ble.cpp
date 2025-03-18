@@ -334,7 +334,7 @@ time_t BLE::_calculateHMOffsetSeconds(time_t seconds, float offset)
 
 void BLE::_setNetworkConfig()
 {
-    localIP      = IPAddress(192, 168, 1, 100);
+    localIP      = IPAddress(192, 168, 1, 1);
     gateway      = IPAddress(192, 168, 1, 1);
     subnet       = IPAddress(255, 255, 255, 0);
     primaryDNS   = IPAddress(8, 8, 8, 8);
