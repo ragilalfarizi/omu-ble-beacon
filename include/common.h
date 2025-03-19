@@ -15,6 +15,7 @@ struct GPSData_t
     char  status;
 };
 
+// TODO: Remove All Offset.
 struct BeaconData_t
 {
     GPSData_t gps;
