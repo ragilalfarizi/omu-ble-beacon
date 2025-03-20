@@ -200,7 +200,9 @@ void BLE::startHTTPServer()
             if (jsonObj["hourMeter"].is<float>() || jsonObj["hourMeter"].is<int>())
             {
                 Serial.print("ok ");
-                data.hourMeter = jsonObj["hourMeter"].as<float>();
+                float  tempHM      = jsonObj["hourMeter"].as<float>();
+                time_t HMinSeconds = tempHM * 3600; // need to convert to seconds in order to save
+                data.hourMeter     = HMinSeconds;
             }
 
             if (jsonObj["offsetHourMeter"].is<float>())
