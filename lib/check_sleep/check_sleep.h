@@ -9,7 +9,7 @@
 #define BATTERY_THRESHOLD       3.5
 #define LOWEST_ANALOG_THRESHOLD 3.0f
 #define MONITOR_DURATION        10000 // 10 seconds
-#define K_VALUE_OF_ADC_READING  0.001724
+#define K_VALUE_OF_ADC_READING  0.001950
 
 void printWakeupReason();
 
