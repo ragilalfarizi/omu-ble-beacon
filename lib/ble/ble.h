@@ -17,7 +17,7 @@
 #define CHAR_OTA_UUID        "2233b614-a358-4551-8ad1-b113764c68f3"
 #define SERVICE_DIS_UUID     "180A"
 #define CHAR_DIS_FW_VER_UUID "2A26"
-#define OTA_WIFI_DURATION    (60 * 60 * 1000) // 2 minutes
+#define OTA_WIFI_DURATION    (10 * 60 * 1000) // 10 minutes
 
 extern BeaconData_t data;
 extern Setting_t    setting;
