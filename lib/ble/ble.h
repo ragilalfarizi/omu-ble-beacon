@@ -123,6 +123,9 @@ class OTAServerCallback : public NimBLEServerCallbacks
             _bleInstance->_wifi->disconnect(true); // disconnect WiFi
             vTaskDelay(pdMS_TO_TICKS(500));
 
+            // save the new name before disconnect
+            _bleInstance->setWiFiSSID(setting.ID);
+
             _bleInstance->_wifi->mode(WIFI_OFF); // Turn off WiFi
             vTaskDelay(pdMS_TO_TICKS(500));
 

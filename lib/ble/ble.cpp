@@ -323,7 +323,8 @@ void BLE::stopAdvertiseOTA()
 
 void BLE::setWiFiSSID(String newSSID)
 {
-    _WIFI_SSID = newSSID;
+    _WIFI_SSID = "WIFI_" + setting.ID; // name + wifi
+    _wifi->softAP(_WIFI_SSID.c_str());
 }
 
 void BLE::restartTask(void *param)
