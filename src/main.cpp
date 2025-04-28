@@ -35,6 +35,7 @@ static void   printFirmwareVersion();
 static float  calculateHMOffset(time_t seconds, float offset);
 static time_t calculateHMOffsetSeconds(time_t seconds, float offset);
 static void   wifiTimeoutCallback(TimerHandle_t xTimer);
+void          goingDeepSleepTimerCB(TimerHandle_t xTimer);
 
 /* FORWARD DECLARATION UNTUK HANDLER DAN SEMAPHORE RTOS */
 TaskHandle_t      dataAcquisitionHandler = NULL;
@@ -126,6 +127,7 @@ void setup()
 
     /* ENABLING ESP32 DEEP SLEEP BY TIMER */
     esp_sleep_enable_ext0_wakeup(GPIO_NUM_35, 0); // 1 = High, 0 = Low
+    esp_sleep_enable_timer_wakeup(DEEP_SLEEP_TIMER_CYCLE_OFF * uS_TO_S_FACTOR);
 
     xTaskCreatePinnedToCore(dataAcquisition, "Data Acquisition", 4096, NULL, 3, &dataAcquisitionHandler, 1);
     xTaskCreatePinnedToCore(sendBLEData, "Send BLE Data", 2048, NULL, 3, &sendBLEDataHandler, 0);
@@ -474,7 +476,19 @@ static bool updateConfigFromUART(Setting_t &setting, const String &input)
 
 static void checkDeepSleepTask(void *param)
 {
+    // Create buffer for averaging battery monitoring
     std::vector<float> batteryVoltageReadings;
+
+    // Create deep sleep callback
+    TimerHandle_t goingDeepSleepTimer;
+    goingDeepSleepTimer = xTimerCreate("OneShot5Min", pdMS_TO_TICKS(DEEP_SLEEP_TIMER_CYCLE_ON * 1000), pdFALSE, NULL,
+                                       goingDeepSleepTimerCB);
+
+    // Check if the callback is created
+    if (goingDeepSleepTimer == NULL)
+    {
+        Serial.println("[SLEEP] Failed to create timer.");
+    }
 
     while (1)
     {
@@ -484,6 +498,12 @@ static void checkDeepSleepTask(void *param)
         {
             // Serial.println("Adapter is plugged in. Keeping system running.");
             currentState = NORMAL;
+
+            if (xTimerIsTimerActive(goingDeepSleepTimer) == pdTRUE)
+            {
+                Serial.println("[SLEEP] Stopping the timer since the analog is HOT");
+                xTimerStop(goingDeepSleepTimer, 0);
+            }
         }
         else
         {
@@ -527,21 +547,19 @@ static void checkDeepSleepTask(void *param)
             // Check if average voltage is below the threshold
             if (averageVoltage < BATTERY_THRESHOLD)
             {
-                Serial.println("Battery voltage is critically low. Entering deep sleep...");
+                Serial.println("Battery voltage is critically low. Starting The Timer...");
 
-                // PIN CHG_STS will be low when the adaptor is plugged in again.
-                esp_sleep_enable_ext0_wakeup(GPIO_NUM_35, 0); // 1 = High, 0 = Low
-                digitalWrite(PIN_EN_READ_BATT_VOLT,
-                             LOW); // Recontrol pin before sleeping
+                if (xTimerIsTimerActive(goingDeepSleepTimer) == pdFALSE)
+                {
+                    Serial.println("[SLEEP] Timer is currently not active. starting the timer.");
+                    xTimerStart(goingDeepSleepTimer, 0);
+                }
+                else
+                {
+                    Serial.println("[SLEEP] Timer is active.");
+                }
+
                 batteryVoltageReadings.clear();
-
-                vTaskDelay(pdMS_TO_TICKS(100));
-
-                // Make GPS to be StandbyMode
-                Serial.println("$PMTK161,0*28");
-
-                Serial.flush();
-                esp_deep_sleep_start();
             }
             else
             {
@@ -651,5 +669,37 @@ static void wifiTimeoutCallback(TimerHandle_t xTimer)
         Serial.println("WiFi is shutting down..");
         delete ble->_wifi;
         ble->_wifi = nullptr;
+    }
+}
+
+void goingDeepSleepTimerCB(TimerHandle_t xTimer)
+{
+    Serial.println("[SLEEP] deep sleep timer triggered!");
+
+    if (data.voltageSupply > LOWEST_ANALOG_THRESHOLD)
+    {
+        // do nothing
+        Serial.println("[SLEEP] deep sleep timer is cancelled");
+    }
+    else
+    {
+        // PIN CHG_STS will be low when the adaptor is plugged in again.
+        esp_sleep_enable_ext0_wakeup(GPIO_NUM_35, 0); // 1 = High, 0 = Low
+        digitalWrite(PIN_EN_READ_BATT_VOLT,
+                     LOW); // Recontrol pin before sleeping
+        // batteryVoltageReadings.clear();
+
+        vTaskDelay(pdMS_TO_TICKS(100));
+
+        // Make GPS to be StandbyMode
+        Serial.println("$PMTK161,0*28");
+        vTaskDelay(pdMS_TO_TICKS(100));
+
+        vTaskSuspend(dataAcquisitionHandler);
+        vTaskDelay(pdMS_TO_TICKS(2000));
+
+        // Serial.flush();
+
+        esp_deep_sleep_start();
     }
 }
