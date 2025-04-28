@@ -8,7 +8,7 @@ extern Setting_t    setting;
 BLE::BLE()
 {
     _WIFI_SSID = "WIFI_" + setting.ID; // name + wifi
-    _WIFIpwd   = "1234567890";
+    _WIFIpwd   = "qimtronics_ota81";
 
     _BT_SSID = "BT_" + setting.ID;
 
