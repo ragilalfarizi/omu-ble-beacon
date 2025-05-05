@@ -5,7 +5,7 @@
 #define PIN_EN_READ_BATT_VOLT      23
 #define PIN_READ_BATT_VOLT         34
 #define PIN_EXT_WAKE_UP            35
-#define DEEP_SLEEP_TIMER_CYCLE_OFF 2 * 60 // OFF state in seconds
+#define DEEP_SLEEP_TIMER_CYCLE_OFF 5 * 60 // OFF state in seconds
 #define uS_TO_S_FACTOR             1000000ULL
 #define DEEP_SLEEP_TIMER_CYCLE_ON  1 * 60 // ON State in second
 
