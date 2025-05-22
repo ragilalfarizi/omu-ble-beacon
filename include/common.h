@@ -2,8 +2,9 @@
 
 #include <Arduino.h>
 
-#define PIN_RX_RS485 18
-#define PIN_TX_RS485 19
+#define PIN_RX_RS485     18
+#define PIN_TX_RS485     19
+#define FIRMWARE_VERSION "v1.7.0-rc1-250505"
 
 #define STALL_TOLERANCE_MS 5000 // 5 seconds tolerance
 
@@ -14,6 +15,7 @@ struct GPSData_t
     char  status;
 };
 
+// TODO: Remove All Offset.
 struct BeaconData_t
 {
     GPSData_t gps;

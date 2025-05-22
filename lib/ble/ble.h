@@ -13,9 +13,11 @@
 #include <WiFi.h>
 #include <esp_err.h>
 
-#define SERVICE_UUID        "6f7e9280-e3d8-47b7-9733-ef0ffffc65fd"
-#define CHARACTERISTIC_UUID "2233b614-a358-4551-8ad1-b113764c68f3"
-#define OTA_WIFI_DURATION   (60 * 60 * 1000) // 2 minutes
+#define SERVICE_OTA_UUID     "6f7e9280-e3d8-47b7-9733-ef0ffffc65fd"
+#define CHAR_OTA_UUID        "2233b614-a358-4551-8ad1-b113764c68f3"
+#define SERVICE_DIS_UUID     "180A"
+#define CHAR_DIS_FW_VER_UUID "2A26"
+#define OTA_WIFI_DURATION    (10 * 60 * 1000) // 10 minutes
 
 extern BeaconData_t data;
 extern Setting_t    setting;
@@ -34,7 +36,9 @@ class BLE
 
     // For Server
     NimBLEServer         *_pServer;
-    NimBLEService        *_pService;
+    NimBLEService        *_pOTAService;
+    NimBLEService        *_pDISService;
+    NimBLECharacteristic *_pFirmwareChar;
     NimBLECharacteristic *_pCharacteristic;
     NimBLEAdvertising    *_pAdvertisingOTA;
     bool                  _isOTASuccess = false;
@@ -118,6 +122,9 @@ class OTAServerCallback : public NimBLEServerCallbacks
         {
             _bleInstance->_wifi->disconnect(true); // disconnect WiFi
             vTaskDelay(pdMS_TO_TICKS(500));
+
+            // save the new name before disconnect
+            _bleInstance->setWiFiSSID(setting.ID);
 
             _bleInstance->_wifi->mode(WIFI_OFF); // Turn off WiFi
             vTaskDelay(pdMS_TO_TICKS(500));

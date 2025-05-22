@@ -8,7 +8,7 @@ extern Setting_t    setting;
 BLE::BLE()
 {
     _WIFI_SSID = "WIFI_" + setting.ID; // name + wifi
-    _WIFIpwd   = "1234567890";
+    _WIFIpwd   = "qimtronics_ota81";
 
     _BT_SSID = "BT_" + setting.ID;
 
@@ -29,20 +29,30 @@ void BLE::startServerOTA()
     _pServer = NimBLEDevice::createServer();
     _pServer->setCallbacks(new OTAServerCallback(this));
 
+    // NOTE: Creating basic information service
+    _pDISService = _pServer->createService(SERVICE_DIS_UUID);
+
+    // Add Firmware Revision Characteristic (Read-only)
+    _pFirmwareChar = _pDISService->createCharacteristic(CHAR_DIS_FW_VER_UUID, NIMBLE_PROPERTY::READ);
+    _pFirmwareChar->setValue(FIRMWARE_VERSION); // Example firmware version
+
+    _pDISService->start();
+
     // create service
-    _pService = _pServer->createService(SERVICE_UUID);
+    _pOTAService = _pServer->createService(SERVICE_OTA_UUID);
 
     // create characteristic
     _pCharacteristic =
-        _pService->createCharacteristic(CHARACTERISTIC_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
+        _pOTAService->createCharacteristic(CHAR_OTA_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
     _pCharacteristic->setCallbacks(new OTACharacteristicCallback());
 
     // start the service
-    _pService->start();
+    _pOTAService->start();
 
     // Start Advertising
     _pAdvertisingOTA = NimBLEDevice::getAdvertising();
-    _pAdvertisingOTA->addServiceUUID(SERVICE_UUID);
+    _pAdvertisingOTA->addServiceUUID(SERVICE_OTA_UUID);
+    _pAdvertisingOTA->addServiceUUID(SERVICE_DIS_UUID);
     _pAdvertisingOTA->start();
 }
 
@@ -190,7 +200,9 @@ void BLE::startHTTPServer()
             if (jsonObj["hourMeter"].is<float>() || jsonObj["hourMeter"].is<int>())
             {
                 Serial.print("ok ");
-                data.hourMeter = jsonObj["hourMeter"].as<float>();
+                float  tempHM      = jsonObj["hourMeter"].as<float>();
+                time_t HMinSeconds = tempHM * 3600; // need to convert to seconds in order to save
+                data.hourMeter     = HMinSeconds;
             }
 
             if (jsonObj["offsetHourMeter"].is<float>())
@@ -206,7 +218,7 @@ void BLE::startHTTPServer()
             JsonDocument responseDoc;
             responseDoc["success"] = true;
             responseDoc["message"] = "Setting updated successfully";
-            responseDoc["data"]    = JsonObject(); // Empty data object if nothing needs to be returned
+            responseDoc["data"]    = jsonObj; // Empty data object if nothing needs to be returned
 
             String response;
             serializeJson(responseDoc, response);
@@ -311,7 +323,8 @@ void BLE::stopAdvertiseOTA()
 
 void BLE::setWiFiSSID(String newSSID)
 {
-    _WIFI_SSID = newSSID;
+    _WIFI_SSID = "WIFI_" + setting.ID; // name + wifi
+    _wifi->softAP(_WIFI_SSID.c_str());
 }
 
 void BLE::restartTask(void *param)
@@ -362,17 +375,22 @@ void BLE::_handleSerializingDataJSON(AsyncWebServerRequest *request)
     // Try populating the JSON object
     try
     {
-        _DataDoc["data"]["gps"]["longitude"] = data.gps.longitude;
-        _DataDoc["data"]["gps"]["latitude"]  = data.gps.latitude;
-        _DataDoc["data"]["gps"]["status"]    = static_cast<String>(data.gps.status);
+        // calculate HM
+        uint32_t HMSeconds = data.hourMeter;
+        float    HMHour    = static_cast<float>(HMSeconds / 3600.0f);
 
-        _DataDoc["data"]["voltageSupply"] = data.voltageSupply;
-        _DataDoc["data"]["hourMeter"]     = data.hourMeter;
+        _DataDoc["gps"]["longitude"] = data.gps.longitude;
+
+        _DataDoc["gps"]["latitude"] = data.gps.latitude;
+        _DataDoc["gps"]["status"]   = static_cast<String>(data.gps.status);
+
+        _DataDoc["voltageSupply"]      = data.voltageSupply;
+        _DataDoc["hourMeterInSeconds"] = HMSeconds;
+        _DataDoc["hourMeterInHours"]   = HMHour;
 
         _DataDoc["setting"]["ID"]                = setting.ID;
         _DataDoc["setting"]["thresholdHM"]       = setting.thresholdHM;
         _DataDoc["setting"]["offsetAnalogInput"] = setting.offsetAnalogInput;
-        _DataDoc["setting"]["offsetHM"]          = setting.offsetHM;
 
         // Wrap inside success response
         _ResponseDoc["success"] = true;
