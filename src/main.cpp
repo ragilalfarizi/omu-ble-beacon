@@ -5,11 +5,8 @@
 
 #include <numeric>
 
-#include "NimBLEAdvertising.h"
-#include "NimBLEBeacon.h"
-#include "NimBLEDevice.h"
-#include "NimBLEEddystoneURL.h"
 #include "analog_input.h"
+#include "ble.h"
 #include "check_sleep.h"
 #include "common.h"
 #include "gps.h"
@@ -17,13 +14,14 @@
 #include "id_management.h"
 #include "rtc.h"
 
-#define FIRMWARE_VERSION "v1.5.2"
+#define FIRMWARE_VERSION "v1.6.0-alpha-feature/ble-ota"
 
 /* DEKLARASI OBJEK YANG DIGUNAKAN TERSIMPAN DI HEAP */
 RTC         *rtc;
 AnalogInput *ain;
 GPS         *gps;
 HourMeter   *hm;
+BLE         *ble;
 
 /* FORWARD DECLARATION UNTUK FUNGSI-FUNGSI DI DEPAN*/
 static void   dataAcquisition(void *pvParam);
@@ -33,11 +31,12 @@ static void   sendToRS485(void *pvParam);
 static void   countingHourMeter(void *pvParam);
 static void   serialConfig(void *pvParam);
 static void   checkDeepSleepTask(void *param);
-static void   setCustomBeacon();
+static void   OTABLEUpdate(void *pvParam);
 static bool   updateConfigFromUART(Setting_t &setting, const String &input);
 static void   printFirmwareVersion();
 static float  calculateHMOffset(time_t seconds, float offset);
 static time_t calculateHMOffsetSeconds(time_t seconds, float offset);
+static void   wifiTimeoutCallback(TimerHandle_t xTimer);
 
 /* FORWARD DECLARATION UNTUK HANDLER DAN SEMAPHORE RTOS */
 TaskHandle_t      dataAcquisitionHandler = NULL;
@@ -47,19 +46,19 @@ TaskHandle_t      sendToRS485Handler     = NULL;
 TaskHandle_t      countingHMHandler      = NULL;
 TaskHandle_t      settingUARTHandler     = NULL;
 TaskHandle_t      checkSleepHandler      = NULL;
+TaskHandle_t      OTABLEUpdateHandler    = NULL;
 SemaphoreHandle_t xSemaphore             = NULL;
 SemaphoreHandle_t dataReadySemaphore     = NULL;
 // TaskHandle_t RTCDemoHandler = NULL;
 
 /* GLOBAL VARIABLES */
-BLEAdvertising *pAdvertising;
-BeaconData_t    data;
-HardwareSerial  modbus(1);
-Setting_t       setting;
-float           scaleAdjusted;
-uint16_t        glitchCounter = 0;
-SystemState_t   currentState;
-float           hourMeterInHours;
+BeaconData_t   data;
+HardwareSerial modbus(1);
+Setting_t      setting;
+float          scaleAdjusted;
+uint16_t       glitchCounter = 0;
+SystemState_t  currentState;
+float          hourMeterInHours;
 
 void setup()
 {
@@ -107,11 +106,6 @@ void setup()
     dataReadySemaphore = xSemaphoreCreateBinary();
     xSemaphoreGive(dataReadySemaphore);
 
-    /* BLE INIT */
-    BLEDevice::init("");
-    BLEDevice::setPower(ESP_PWR_LVL_N12);
-    pAdvertising = BLEDevice::getAdvertising();
-
     /* HOUR METER INIT */
     hm             = new HourMeter();
     data.hourMeter = hm->loadHMFromStorage();
@@ -127,6 +121,11 @@ void setup()
     Serial.printf("[setting] offsetHM \t\t: %.2f %%\n", setting.offsetHM);
     scaleAdjusted = setting.offsetAnalogInput;
 
+    /* BLE INIT */
+    ble = new BLE();
+    ble->begin();
+    Serial.println("[BLE] Inisialisasi BLE");
+
     /* ENABLING ESP32 DEEP SLEEP BY TIMER */
     esp_sleep_enable_ext0_wakeup(GPIO_NUM_35, 0); // 1 = High, 0 = Low
 
@@ -136,6 +135,7 @@ void setup()
     xTaskCreatePinnedToCore(countingHourMeter, "Updating Hour Meter", 8192, NULL, 3, &countingHMHandler, 0);
     xTaskCreatePinnedToCore(serialConfig, "Updating setting", 4096, NULL, 3, &settingUARTHandler, 1);
     xTaskCreatePinnedToCore(checkDeepSleepTask, "Check Deep Sleep", 4096, NULL, 1, &checkSleepHandler, 1);
+    xTaskCreatePinnedToCore(OTABLEUpdate, "OTA BLE Update", 4096, NULL, 2, &OTABLEUpdateHandler, 1);
 }
 
 void loop()
@@ -209,78 +209,78 @@ static void dataAcquisition(void *pvParam)
     }
 }
 
-static void setCustomBeacon()
-{
-    // atur data advertising
-    BLEAdvertisementData oAdvertisementData = BLEAdvertisementData();
-    BLEAdvertisementData oScanResponseData  = BLEAdvertisementData();
-
-    const uint16_t beaconUUID = 0xFEAA;
-    oScanResponseData.setFlags(0x06); // GENERAL_DISC_MODE 0x02 | BR_EDR_NOT_SUPPORTED 0x04
-    oScanResponseData.setCompleteServices(BLEUUID(beaconUUID));
-
-    // uint16_t voltage = random(2800, 3700); // dalam millivolts
-    // analogInputVal = ain->readAnalogInput(AnalogPin::PIN_A1);
-    // float current = 1.5;             // dalam ampere
-    // uint32_t timestamp = 1678801234; // contoh Unix TimeStamp
-
-    // Convert current to a 16-bit fixed-point format (e.g., 1.5 A -> 384 in 8.8
-    // format) Konversi arus ke format (contoh: 1.5 A -> 384 di format 8.8)
-    // int16_t currentFixedPoint = (int16_t)(current * 256);
-    // int16_t analogInputFixedPoint = (int16_t)(analogInputVal * 256);
-
-    /* PROCESSING DATA SEBELUM DIKIRIM MELALUI BLE */
-    char beacon_data[19];
-
-    // Processing ID
-    ListID_t id;
-    uint16_t number;
-
-    extractBeaconID(std::string(setting.ID.c_str()), id, number);
-
-    uint16_t volt                = data.voltageSupply * 1000; // 3300mV = 3.3V
-    int32_t  latitudeFixedPoint  = (int32_t)(data.gps.latitude * 256);
-    int32_t  longitudeFixedPoint = (int32_t)(data.gps.longitude * 256);
-
-    // TODO: add offset to the hourmeter first
-    time_t offsettedSecondsHM = calculateHMOffsetSeconds(data.hourMeter, setting.offsetHM);
-
-    // NOTE: DEBUG
-    // Serial.printf("[DEBUG] original HM -> %ld, offsettedHM -> %ld\n", data.hourMeter, offsettedSecondsHM);
-
-    beacon_data[0]  = static_cast<uint8_t>(id); // List ID
-    beacon_data[1]  = ((number & 0xFF00) >> 8); // Upper ID Digit
-    beacon_data[2]  = (number & 0xFF);          // Lower ID Digit
-    beacon_data[3]  = ((volt & 0xFF00) >> 8);   // Battery voltage, 1 mV/bit i.e. 0xCE4 = 3300mV = 3.3V
-    beacon_data[4]  = (volt & 0xFF);            //
-    beacon_data[5]  = 0;                        // Eddystone Frame Type (Unencrypted Eddystone-TLM)
-    beacon_data[6]  = data.gps.status;          //
-    beacon_data[7]  = ((longitudeFixedPoint & 0xFF000000) >> 24); //
-    beacon_data[8]  = ((longitudeFixedPoint & 0xFF0000) >> 16);   //
-    beacon_data[9]  = ((longitudeFixedPoint & 0xFF00) >> 8);      //
-    beacon_data[10] = (longitudeFixedPoint & 0xFF);               //
-    beacon_data[11] = ((latitudeFixedPoint & 0xFF000000) >> 24);  //
-    beacon_data[12] = ((latitudeFixedPoint & 0xFF0000) >> 16);    //
-    beacon_data[13] = ((latitudeFixedPoint & 0xFF00) >> 8);       //
-    beacon_data[14] = (latitudeFixedPoint & 0xFF);                //
-    beacon_data[15] = ((offsettedSecondsHM & 0xFF000000) >> 24);  //
-    beacon_data[16] = ((offsettedSecondsHM & 0xFF0000) >> 16);    //
-    beacon_data[17] = ((offsettedSecondsHM & 0xFF00) >> 8);       //
-    beacon_data[18] = (offsettedSecondsHM & 0xFF);                //
-
-    oScanResponseData.setServiceData(BLEUUID(beaconUUID), std::string(beacon_data, sizeof(beacon_data)));
-    oAdvertisementData.setName("UMO BEACON");
-    pAdvertising->setAdvertisementData(oAdvertisementData);
-    pAdvertising->setScanResponseData(oScanResponseData);
-}
+// static void setCustomBeacon()
+// {
+//     // atur data advertising
+//     BLEAdvertisementData oAdvertisementData = BLEAdvertisementData();
+//     BLEAdvertisementData oScanResponseData  = BLEAdvertisementData();
+//
+//     const uint16_t beaconUUID = 0xFEAA;
+//     oScanResponseData.setFlags(0x06); // GENERAL_DISC_MODE 0x02 | BR_EDR_NOT_SUPPORTED 0x04
+//     oScanResponseData.setCompleteServices(BLEUUID(beaconUUID));
+//
+//     // uint16_t voltage = random(2800, 3700); // dalam millivolts
+//     // analogInputVal = ain->readAnalogInput(AnalogPin::PIN_A1);
+//     // float current = 1.5;             // dalam ampere
+//     // uint32_t timestamp = 1678801234; // contoh Unix TimeStamp
+//
+//     // Convert current to a 16-bit fixed-point format (e.g., 1.5 A -> 384 in 8.8
+//     // format) Konversi arus ke format (contoh: 1.5 A -> 384 di format 8.8)
+//     // int16_t currentFixedPoint = (int16_t)(current * 256);
+//     // int16_t analogInputFixedPoint = (int16_t)(analogInputVal * 256);
+//
+//     /* PROCESSING DATA SEBELUM DIKIRIM MELALUI BLE */
+//     char beacon_data[19];
+//
+//     // Processing ID
+//     ListID_t id;
+//     uint16_t number;
+//
+//     extractBeaconID(std::string(setting.ID.c_str()), id, number);
+//
+//     uint16_t volt                = data.voltageSupply * 1000; // 3300mV = 3.3V
+//     int32_t  latitudeFixedPoint  = (int32_t)(data.gps.latitude * 256);
+//     int32_t  longitudeFixedPoint = (int32_t)(data.gps.longitude * 256);
+//
+//     // TODO: add offset to the hourmeter first
+//     time_t offsettedSecondsHM = calculateHMOffsetSeconds(data.hourMeter, setting.offsetHM);
+//
+//     // NOTE: DEBUG
+//     // Serial.printf("[DEBUG] original HM -> %ld, offsettedHM -> %ld\n", data.hourMeter, offsettedSecondsHM);
+//
+//     beacon_data[0]  = static_cast<uint8_t>(id); // List ID
+//     beacon_data[1]  = ((number & 0xFF00) >> 8); // Upper ID Digit
+//     beacon_data[2]  = (number & 0xFF);          // Lower ID Digit
+//     beacon_data[3]  = ((volt & 0xFF00) >> 8);   // Battery voltage, 1 mV/bit i.e. 0xCE4 = 3300mV = 3.3V
+//     beacon_data[4]  = (volt & 0xFF);            //
+//     beacon_data[5]  = 0;                        // Eddystone Frame Type (Unencrypted Eddystone-TLM)
+//     beacon_data[6]  = data.gps.status;          //
+//     beacon_data[7]  = ((longitudeFixedPoint & 0xFF000000) >> 24); //
+//     beacon_data[8]  = ((longitudeFixedPoint & 0xFF0000) >> 16);   //
+//     beacon_data[9]  = ((longitudeFixedPoint & 0xFF00) >> 8);      //
+//     beacon_data[10] = (longitudeFixedPoint & 0xFF);               //
+//     beacon_data[11] = ((latitudeFixedPoint & 0xFF000000) >> 24);  //
+//     beacon_data[12] = ((latitudeFixedPoint & 0xFF0000) >> 16);    //
+//     beacon_data[13] = ((latitudeFixedPoint & 0xFF00) >> 8);       //
+//     beacon_data[14] = (latitudeFixedPoint & 0xFF);                //
+//     beacon_data[15] = ((offsettedSecondsHM & 0xFF000000) >> 24);  //
+//     beacon_data[16] = ((offsettedSecondsHM & 0xFF0000) >> 16);    //
+//     beacon_data[17] = ((offsettedSecondsHM & 0xFF00) >> 8);       //
+//     beacon_data[18] = (offsettedSecondsHM & 0xFF);                //
+//
+//     oScanResponseData.setServiceData(BLEUUID(beaconUUID), std::string(beacon_data, sizeof(beacon_data)));
+//     oAdvertisementData.setName(setting.ID.c_str());
+//     pAdvertising->setAdvertisementData(oAdvertisementData);
+//     pAdvertising->setScanResponseData(oScanResponseData);
+// }
 
 static void sendBLEData(void *pvParam)
 {
     while (1)
     {
-        setCustomBeacon();
+        ble->setCustomBeacon(data, setting);
 
-        pAdvertising->start();
+        ble->advertiseBeacon();
 
         if (currentState == NORMAL)
         {
@@ -626,6 +626,57 @@ static void checkDeepSleepTask(void *param)
     }
 }
 
+static void OTABLEUpdate(void *pvParam)
+{
+    TimerHandle_t wifiTimer;
+    wifiTimer = xTimerCreate("WiFi Timeout", pdMS_TO_TICKS(OTA_WIFI_DURATION), pdFALSE, NULL, wifiTimeoutCallback);
+
+    ble->startServerOTA();
+
+    BLE::OTAState state        = BLE::IDLE;
+    bool          wasConnected = false; // Track previous connection state
+
+    while (1)
+    {
+        switch (state)
+        {
+        case BLE::IDLE:
+            if (ble->isConnectedToWiFi)
+            {
+                Serial.println("Switching to OTA ON state...");
+                // ble->stopAdvertiseOTA();
+                ble->startHTTPServer();
+
+                if (xTimerIsTimerActive(wifiTimer) == pdFALSE)
+                {
+                    xTimerStart(wifiTimer, 0);
+                }
+
+                state = BLE::OTA_ON;
+            }
+            break;
+
+        case BLE::OTA_ON:
+            if (!ble->isConnectedToWiFi || xTimerIsTimerActive(wifiTimer) == pdFALSE)
+            {
+                Serial.println("Switching to IDLE state...");
+                // ble->startAdvertiseOTA();
+                ble->stopHTTPServer();
+
+                if (xTimerIsTimerActive(wifiTimer) == pdTRUE)
+                {
+                    xTimerStop(wifiTimer, 0);
+                }
+
+                state = BLE::IDLE;
+            }
+            break;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(500)); // Prevent busy looping
+    }
+}
+
 static void printFirmwareVersion()
 {
     Serial.printf("\n");
@@ -652,4 +703,22 @@ static time_t calculateHMOffsetSeconds(time_t seconds, float offset)
 {
     time_t calculatedHM = static_cast<time_t>(round(seconds + (seconds * (offset / 100.0f))));
     return calculatedHM;
+}
+
+static void wifiTimeoutCallback(TimerHandle_t xTimer)
+{
+    // Access the global instance of BLE
+    if (ble->_wifi)
+    {
+        Serial.println("WiFi is about to shutdown..");
+        ble->_wifi->disconnect(true); // disconnect WiFi
+        // vTaskDelay(pdMS_TO_TICKS(500));
+
+        ble->_wifi->mode(WIFI_OFF); // Turn off WiFi
+        // vTaskDelay(pdMS_TO_TICKS(500));
+
+        Serial.println("WiFi is shutting down..");
+        delete ble->_wifi;
+        ble->_wifi = nullptr;
+    }
 }
