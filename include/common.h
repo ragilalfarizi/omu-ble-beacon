@@ -2,9 +2,10 @@
 
 #include <Arduino.h>
 
-#define PIN_RX_RS485     18
-#define PIN_TX_RS485     19
-#define FIRMWARE_VERSION "v1.7.0-rc2-250521"
+#define PIN_RX_RS485         18
+#define PIN_TX_RS485         19
+#define FIRMWARE_VERSION     "v1.7.0-250526"
+#define DEEP_SLEEP_CYCLE_STR "0.5 minute ON, 1.5 minute OFF"
 
 #define STALL_TOLERANCE_MS 5000 // 5 seconds tolerance
 
