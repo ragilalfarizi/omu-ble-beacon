@@ -632,6 +632,7 @@ static void printFirmwareVersion()
     Serial.printf("########################################\n");
     Serial.printf("##                                    ##\n");
     Serial.printf("##  FIRMWARE VERSION: %-10s  ##\n", FIRMWARE_VERSION);
+    Serial.printf("##  DEEP SLEEP CYCLE: %s  ##\n", DEEP_SLEEP_CYCLE_STR);
     Serial.printf("##                                    ##\n");
     Serial.printf("########################################\n");
     Serial.printf("\n");
