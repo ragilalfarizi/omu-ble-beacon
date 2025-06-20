@@ -1,6 +1,8 @@
-> Author : Ragil Alfarizi
-> No. ID : QIM.TE.0047
-> Contact : ragil.alfarizi@qimtronics.com
+```
+Author : Ragil Alfarizi  
+No. ID : QIM.TE.0047  
+Contact : ragil.alfarizi@qimtronics.com  
+```
 --- 
 # CHANGELOG
 ## RELEASES
