@@ -51,6 +51,26 @@ ListID_t stringToEnum(const std::string &id)
         return XST;
     if (id == "XWT")
         return XWT;
+    if (id == "XAC")
+        return XAC;
+    if (id == "XCC")
+        return XCC;
+    if (id == "XCG")
+        return XCG;
+    if (id == "XCO")
+        return XCO;
+    if (id == "XFL")
+        return XFL;
+    if (id == "XLS")
+        return XLS;
+    if (id == "XMS")
+        return XMS;
+    if (id == "XPP")
+        return XPP;
+    if (id == "XTH")
+        return XTH;
+    if (id == "XTL")
+        return XTL;
     return UNKNOWN; // Fallback for unknown strings
 }
 
